@@ -49,6 +49,14 @@ Outputs:
 - `style_invariance`: CE(clean) + consistency KL(clean || style-reframed)
 - `sentiment_invariance`: CE(clean) + consistency KL(clean || sentiment-shifted)
 
+## Scope lock (do not exceed unless explicitly requested)
+Future iterations should stay within this strategy scope only:
+- vanilla
+- lexical_mhc_lite (mHC-lite main line)
+- style_invariance
+- sentiment_invariance
+
 ## Notes
 - style/sentiment augmenters are lightweight local proxies (no external LLM API yet)
-- if needed, next step is replacing them with LLM-generated rewrites for closer reproduction of SheepDog/AdSent
+- mHC-related code paths should keep rich comments for readability and reviewability
+- if needed, next step is replacing style/sentiment proxies with LLM-generated rewrites for closer reproduction of SheepDog/AdSent

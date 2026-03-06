@@ -16,7 +16,7 @@ from src.evaluate import attack_success_rate, compute_metrics
 from src.modeling import ModelConfig, RobertaFakeNewsClassifier
 from src.training_strategies import StrategyConfig, total_loss
 
-STRATEGIES = ["vanilla", "lexical_mhc_lite", "style_invariance", "sentiment_invariance", "rdrop"]
+STRATEGIES = ["vanilla", "lexical_mhc_lite", "style_invariance", "sentiment_invariance"]
 ATTACKS = ["clean", "lexical", "style", "sentiment"]
 
 
@@ -37,7 +37,7 @@ def build_collate(tokenizer, max_len: int, train_strategy: str = "vanilla"):
 
         clean = tokenizer(texts, padding=True, truncation=True, max_length=max_len, return_tensors="pt")
 
-        if train_strategy in {"vanilla", "rdrop"}:
+        if train_strategy == "vanilla":
             aug = None
         else:
             aug_mode = {
@@ -99,15 +99,11 @@ def train_one(strategy: str, backbone: str, epochs: int, lr: float, batch_size: 
             clean_mask = clean["attention_mask"].to(device)
             clean_logits = model(clean_ids, clean_mask)
 
-            if strategy == "rdrop":
-                clean_logits_2 = model(clean_ids, clean_mask)
-                loss = total_loss(scfg, clean_logits, labels, clean_logits_2=clean_logits_2)
+            if aug is not None:
+                aug_logits = model(aug["input_ids"].to(device), aug["attention_mask"].to(device))
             else:
-                if aug is not None:
-                    aug_logits = model(aug["input_ids"].to(device), aug["attention_mask"].to(device))
-                else:
-                    aug_logits = None
-                loss = total_loss(scfg, clean_logits, labels, aug_logits=aug_logits)
+                aug_logits = None
+            loss = total_loss(scfg, clean_logits, labels, aug_logits=aug_logits)
             optim.zero_grad()
             loss.backward()
             optim.step()

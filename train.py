@@ -17,7 +17,7 @@ from src.training_strategies import StrategyConfig, total_loss
 @dataclass
 class TrainConfig:
     backbone: str = "roberta-base"
-    strategy: str = "vanilla"  # vanilla|lexical_mhc_lite|style_invariance|sentiment_invariance|rdrop
+    strategy: str = "vanilla"  # vanilla|lexical_mhc_lite|style_invariance|sentiment_invariance
     epochs: int = 4
     lr: float = 2e-5
     batch_size: int = 16
@@ -42,7 +42,7 @@ def build_collate_fn(tokenizer, max_len: int, strategy: str):
 
         clean = tokenizer(texts, padding=True, truncation=True, max_length=max_len, return_tensors="pt")
 
-            if strategy in {"vanilla", "rdrop"}:
+        if strategy == "vanilla":
             aug = None
         else:
             aug_texts = [_augment_text(t, strategy) for t in texts]
@@ -53,7 +53,7 @@ def build_collate_fn(tokenizer, max_len: int, strategy: str):
     return collate
 
 
-def evaluate(model, dl, device, strategy):
+def evaluate(model, dl, device):
     model.eval()
     total = 0
     correct = 0
@@ -95,20 +95,14 @@ def train(cfg: TrainConfig):
 
             clean_logits = model(input_ids, attention_mask)
 
-            if cfg.strategy == "rdrop":
-                # 2nd stochastic forward pass (dropout noise) for R-Drop regularization
-                clean_logits_2 = model(input_ids, attention_mask)
-                aug_logits = None
-                loss = total_loss(strategy, clean_logits, labels, aug_logits=aug_logits, clean_logits_2=clean_logits_2)
+            if aug is not None:
+                aug_ids = aug["input_ids"].to(cfg.device)
+                aug_mask = aug["attention_mask"].to(cfg.device)
+                aug_logits = model(aug_ids, aug_mask)
             else:
-                if aug is not None:
-                    aug_ids = aug["input_ids"].to(cfg.device)
-                    aug_mask = aug["attention_mask"].to(cfg.device)
-                    aug_logits = model(aug_ids, aug_mask)
-                else:
-                    aug_logits = None
+                aug_logits = None
 
-                loss = total_loss(strategy, clean_logits, labels, aug_logits=aug_logits)
+            loss = total_loss(strategy, clean_logits, labels, aug_logits=aug_logits)
 
             optim.zero_grad()
             loss.backward()
@@ -116,7 +110,7 @@ def train(cfg: TrainConfig):
 
             running_loss += loss.item()
 
-        val_acc = evaluate(model, val_dl, cfg.device, cfg.strategy)
+        val_acc = evaluate(model, val_dl, cfg.device)
         print(f"Epoch {epoch + 1}/{cfg.epochs} | loss={running_loss / max(len(train_dl), 1):.4f} | val_acc={val_acc:.4f}")
 
     print("Training finished.")
@@ -129,7 +123,7 @@ if __name__ == "__main__":
         "--strategy",
         type=str,
         default="vanilla",
-        choices=["vanilla", "lexical_mhc_lite", "style_invariance", "sentiment_invariance", "rdrop"],
+        choices=["vanilla", "lexical_mhc_lite", "style_invariance", "sentiment_invariance"],
     )
     p.add_argument("--epochs", type=int, default=4)
     p.add_argument("--lr", type=float, default=2e-5)

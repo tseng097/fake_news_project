@@ -6,7 +6,7 @@ import torch.nn.functional as F
 
 @dataclass
 class StrategyConfig:
-    name: str = "vanilla"  # vanilla|lexical_mhc_lite|style_invariance|sentiment_invariance|rdrop
+    name: str = "vanilla"  # vanilla|lexical_mhc_lite|style_invariance|sentiment_invariance
     consistency_weight: float = 0.5
 
 
@@ -21,33 +21,28 @@ def consistency_kl(p_logits, q_logits):
     return F.kl_div(p, q, reduction="batchmean")
 
 
-def symmetric_kl(p_logits, q_logits):
-    """0.5*(KL(p||q) + KL(q||p)) used by R-Drop-style regularization."""
-    return 0.5 * (consistency_kl(p_logits, q_logits) + consistency_kl(q_logits, p_logits))
+def total_loss(strategy: StrategyConfig, clean_logits, labels, aug_logits=None):
+    """Compute training loss for the allowed strategy scope.
 
+    Modes (project-agreed scope):
+    - vanilla:
+        Standard supervised objective on clean text only.
+        L = CE(clean)
 
-def total_loss(strategy: StrategyConfig, clean_logits, labels, aug_logits=None, clean_logits_2=None):
-    """Compute training loss.
+    - lexical_mhc_lite / style_invariance / sentiment_invariance:
+        Consistency-regularized objective.
+        L = CE(clean) + lambda * KL(clean || augmented)
 
-    Modes:
-    - vanilla: CE(clean)
-    - lexical_mhc_lite/style_invariance/sentiment_invariance:
-        CE(clean) + lambda * KL(clean || augmented)
-    - rdrop:
-        average CE over 2 stochastic forward passes + lambda * symmetric KL between them
+    Why this matches mHC-lite intent here:
+    - We keep a stable prediction manifold around the clean sample by requiring
+      agreement with a meaning-preserving transformed view.
+    - For lexical_mhc_lite, the transformed view is synonym-perturbed text,
+      which is the designated mHC-lite path in this repository.
 
     Notes:
-    - "mHC-lite" in this repo = lexical invariance under synonym perturbation.
-    - R-Drop does not require explicit text augmentation; it regularizes prediction
-      consistency under dropout noise.
+    - Do not introduce extra strategies outside the agreed scope unless user asks.
+    - If no augmented logits are provided, the function safely falls back to CE.
     """
-    if strategy.name == "rdrop":
-        if clean_logits_2 is None:
-            raise ValueError("rdrop requires clean_logits_2 (2nd stochastic forward pass)")
-        ce1 = classification_loss(clean_logits, labels)
-        ce2 = classification_loss(clean_logits_2, labels)
-        return 0.5 * (ce1 + ce2) + strategy.consistency_weight * symmetric_kl(clean_logits, clean_logits_2)
-
     ce = classification_loss(clean_logits, labels)
     if strategy.name == "vanilla" or aug_logits is None:
         return ce
