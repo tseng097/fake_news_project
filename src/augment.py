@@ -1,0 +1,126 @@
+from __future__ import annotations
+
+import random
+import re
+from typing import List
+
+
+try:
+    from nltk.corpus import wordnet as wn
+except Exception:
+    wn = None
+
+
+CONTRACTIONS = {
+    "can't": "cannot",
+    "won't": "will not",
+    "n't": " not",
+    "I'm": "I am",
+    "it's": "it is",
+    "that's": "that is",
+    "they're": "they are",
+    "we're": "we are",
+    "isn't": "is not",
+    "aren't": "are not",
+}
+
+SENTIMENT_SWAP = {
+    "good": "bad",
+    "great": "terrible",
+    "excellent": "awful",
+    "positive": "negative",
+    "benefit": "harm",
+    "success": "failure",
+    "safe": "dangerous",
+    "bad": "good",
+    "terrible": "great",
+    "awful": "excellent",
+    "negative": "positive",
+    "harm": "benefit",
+    "failure": "success",
+    "dangerous": "safe",
+}
+
+
+def _tokenize_simple(text: str) -> List[str]:
+    return re.findall(r"\w+|[^\w\s]", text, flags=re.UNICODE)
+
+
+def _detokenize_simple(tokens: List[str]) -> str:
+    s = ""
+    for t in tokens:
+        if re.match(r"[^\w\s]", t):
+            s += t
+        else:
+            if len(s) and not s.endswith((" ", "\n", "\t", "(", "[", "{")):
+                s += " "
+            s += t
+    return s
+
+
+def lexical_synonym_perturb(text: str, budget_ratio: float = 0.08, seed: int | None = None) -> str:
+    """Lexical perturbation by WordNet synonyms.
+
+    If NLTK wordnet is unavailable, falls back to no-op.
+    """
+    if wn is None:
+        return text
+
+    rng = random.Random(seed)
+    tokens = _tokenize_simple(text)
+    word_positions = [i for i, t in enumerate(tokens) if t.isalpha() and len(t) > 3]
+    if not word_positions:
+        return text
+
+    k = max(1, int(len(word_positions) * budget_ratio))
+    cand_pos = word_positions[:]
+    rng.shuffle(cand_pos)
+
+    changed = 0
+    for pos in cand_pos:
+        tok = tokens[pos]
+        synsets = wn.synsets(tok)
+        lemmas = []
+        for s in synsets:
+            lemmas.extend([l.name().replace("_", " ") for l in s.lemmas()])
+        lemmas = [w for w in lemmas if w.lower() != tok.lower() and w.isalpha()]
+        if not lemmas:
+            continue
+        replacement = rng.choice(lemmas)
+        if tok[0].isupper():
+            replacement = replacement.capitalize()
+        tokens[pos] = replacement
+        changed += 1
+        if changed >= k:
+            break
+
+    return _detokenize_simple(tokens)
+
+
+def style_reframe_simple(text: str) -> str:
+    """Lightweight style reframing (SheepDog-style proxy without LLM API)."""
+    out = text
+    for k, v in CONTRACTIONS.items():
+        out = out.replace(k, v)
+    # reduce emphatic punctuation style
+    out = re.sub(r"!{2,}", "!", out)
+    out = re.sub(r"\?{2,}", "?", out)
+    # normalize repeated spaces
+    out = re.sub(r"\s+", " ", out).strip()
+    return out
+
+
+def sentiment_shift_simple(text: str) -> str:
+    """Lexicon-based sentiment swapping (AdSent-style proxy without LLM API)."""
+    tokens = _tokenize_simple(text)
+    out = []
+    for t in tokens:
+        low = t.lower()
+        if low in SENTIMENT_SWAP:
+            r = SENTIMENT_SWAP[low]
+            if t and t[0].isupper():
+                r = r.capitalize()
+            out.append(r)
+        else:
+            out.append(t)
+    return _detokenize_simple(out)
