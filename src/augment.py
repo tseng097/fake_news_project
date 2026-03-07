@@ -58,8 +58,20 @@ def _detokenize_simple(tokens: List[str]) -> str:
     return s
 
 
-def lexical_synonym_perturb(text: str, budget_ratio: float = 0.08, seed: int | None = None) -> str:
-    """Lexical perturbation by WordNet synonyms.
+def lexical_synonym_perturb(
+    text: str,
+    budget_ratio: float = 0.08,
+    seed: int | None = None,
+    protected_words: set[str] | None = None,
+) -> str:
+    """Lexical perturbation by WordNet synonyms for mHC-lite training.
+
+    Design choice (paper-grounded): we avoid swapping sentiment-bearing lexemes
+    by default, because sentiment cues are a known attack surface in fake-news
+    detection and replacing them can unintentionally drift label semantics.
+
+    This keeps lexical_mhc_lite focused on lexical paraphrase invariance, while
+    sentiment-specific perturbations remain isolated to sentiment_invariance.
 
     If NLTK wordnet is unavailable, falls back to no-op.
     """
@@ -68,7 +80,16 @@ def lexical_synonym_perturb(text: str, budget_ratio: float = 0.08, seed: int | N
 
     rng = random.Random(seed)
     tokens = _tokenize_simple(text)
-    word_positions = [i for i, t in enumerate(tokens) if t.isalpha() and len(t) > 3]
+
+    # mHC-lite safety rail: do not replace explicitly protected words
+    # (e.g., sentiment pivots), reducing augmentation-induced label drift.
+    protected = protected_words if protected_words is not None else set(SENTIMENT_SWAP.keys())
+
+    word_positions = [
+        i
+        for i, t in enumerate(tokens)
+        if t.isalpha() and len(t) > 3 and t.lower() not in protected
+    ]
     if not word_positions:
         return text
 
@@ -83,7 +104,7 @@ def lexical_synonym_perturb(text: str, budget_ratio: float = 0.08, seed: int | N
         lemmas = []
         for s in synsets:
             lemmas.extend([l.name().replace("_", " ") for l in s.lemmas()])
-        lemmas = [w for w in lemmas if w.lower() != tok.lower() and w.isalpha()]
+        lemmas = [w for w in lemmas if w.lower() != tok.lower() and w.isalpha() and w.lower() not in protected]
         if not lemmas:
             continue
         replacement = rng.choice(lemmas)
