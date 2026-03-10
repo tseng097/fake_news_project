@@ -69,6 +69,19 @@ def _detokenize_simple(tokens: List[str]) -> str:
     return s
 
 
+def _sentiment_polarity_balance(text: str) -> int:
+    """Cheap polarity proxy for augmentation safety checks.
+
+    Positive terms contribute +1, negative terms contribute -1 using the
+    project's sentiment swap lexicon. This intentionally lightweight heuristic
+    is only used as a guardrail for mHC-lite lexical perturbations.
+    """
+    tokens = [t.lower() for t in _tokenize_simple(text) if t.isalpha()]
+    pos = {"good", "great", "excellent", "positive", "benefit", "success", "safe"}
+    neg = {"bad", "terrible", "awful", "negative", "harm", "failure", "dangerous"}
+    return sum((1 if t in pos else -1 if t in neg else 0) for t in tokens)
+
+
 def lexical_synonym_perturb(
     text: str,
     budget_ratio: float = 0.08,
@@ -126,7 +139,17 @@ def lexical_synonym_perturb(
         if changed >= k:
             break
 
-    return _detokenize_simple(tokens)
+    candidate = _detokenize_simple(tokens)
+
+    # mHC-lite safety guard (paper-grounded): lexical paraphrases can still
+    # induce sentiment drift, which may break label preservation for
+    # consistency training. If polarity sign flips, keep original text.
+    before = _sentiment_polarity_balance(text)
+    after = _sentiment_polarity_balance(candidate)
+    if before != 0 and after != 0 and (before > 0) != (after > 0):
+        return text
+
+    return candidate
 
 
 def style_reframe_simple(text: str) -> str:
