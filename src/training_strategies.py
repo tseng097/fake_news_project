@@ -8,6 +8,7 @@ import torch.nn.functional as F
 class StrategyConfig:
     name: str = "vanilla"  # vanilla|lexical_mhc_lite|style_invariance|sentiment_invariance
     consistency_weight: float = 0.5
+    manifold_weight: float = 0.05
 
 
 def classification_loss(logits, labels):
@@ -34,7 +35,7 @@ def consistency_kl_symmetric(clean_logits, aug_logits):
     )
 
 
-def total_loss(strategy: StrategyConfig, clean_logits, labels, aug_logits=None):
+def total_loss(strategy: StrategyConfig, clean_logits, labels, aug_logits=None, manifold_loss=None):
     """Compute training loss for the allowed strategy scope.
 
     Modes (project-agreed scope):
@@ -61,10 +62,20 @@ def total_loss(strategy: StrategyConfig, clean_logits, labels, aug_logits=None):
     Notes:
     - Do not introduce extra strategies outside the agreed scope unless user asks.
     - If no augmented logits are provided, the function safely falls back to CE.
+    - Optional `manifold_loss` supports the simplified manifold-constrained
+      hyper-connection regularizer from the model side.
     """
     ce = classification_loss(clean_logits, labels)
+
     if strategy.name == "vanilla" or aug_logits is None:
-        return ce
-    if strategy.name == "lexical_mhc_lite":
-        return ce + strategy.consistency_weight * consistency_kl_symmetric(clean_logits, aug_logits)
-    return ce + strategy.consistency_weight * consistency_kl(clean_logits, aug_logits)
+        base = ce
+    elif strategy.name == "lexical_mhc_lite":
+        base = ce + strategy.consistency_weight * consistency_kl_symmetric(clean_logits, aug_logits)
+    else:
+        base = ce + strategy.consistency_weight * consistency_kl(clean_logits, aug_logits)
+
+    # Simple manifold regularization term from mHC-lite structure (if available)
+    if manifold_loss is not None:
+        base = base + strategy.manifold_weight * manifold_loss
+
+    return base

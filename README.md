@@ -39,6 +39,18 @@ Outputs:
 - `outputs/results_matrix.csv`
 - `outputs/f1_pivot.csv`
 
+### Simple manifold-constrained hyper-connections (mHC-lite structure)
+A lightweight structural variant is enabled by default in `train.py`:
+- Fuse `[CLS]` and masked mean-pooled sequence features via a gated hyper-connection
+- Add manifold bottleneck projection/reconstruction regularization
+- Training loss includes optional `manifold_weight * manifold_loss`
+
+Controls:
+```bash
+python train.py --strategy lexical_mhc_lite --use-mhc-lite-structure --manifold-weight 0.05
+python train.py --strategy lexical_mhc_lite --no-mhc-lite-structure
+```
+
 ---
 
 ## 繁體中文
@@ -79,3 +91,15 @@ python evaluate_matrix.py --epochs 2 --device cpu --out-dir outputs
 輸出：
 - `outputs/results_matrix.csv`
 - `outputs/f1_pivot.csv`
+
+### 簡易 manifold-constrained hyper-connections（mHC-lite 結構）
+`train.py` 預設啟用輕量結構版：
+- 用 gated hyper-connection 融合 `[CLS]` 與 masked mean-pooled 特徵
+- 加入 manifold bottleneck 投影/重建正則
+- 總 loss 可加入 `manifold_weight * manifold_loss`
+
+控制參數：
+```bash
+python train.py --strategy lexical_mhc_lite --use-mhc-lite-structure --manifold-weight 0.05
+python train.py --strategy lexical_mhc_lite --no-mhc-lite-structure
+```

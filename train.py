@@ -23,6 +23,8 @@ class TrainConfig:
     batch_size: int = 16
     max_len: int = 256
     device: str = "cpu"
+    use_mhc_lite_structure: bool = True
+    manifold_weight: float = 0.05
 
 
 def _augment_text(text: str, strategy: str) -> str:
@@ -82,9 +84,11 @@ def train(cfg: TrainConfig):
     train_dl = DataLoader(train_split, batch_size=cfg.batch_size, shuffle=True, collate_fn=collate)
     val_dl = DataLoader(val_split, batch_size=cfg.batch_size, shuffle=False, collate_fn=collate)
 
-    model = RobertaFakeNewsClassifier(ModelConfig(backbone=cfg.backbone)).to(cfg.device)
+    model = RobertaFakeNewsClassifier(
+        ModelConfig(backbone=cfg.backbone, use_mhc_lite=cfg.use_mhc_lite_structure)
+    ).to(cfg.device)
     optim = torch.optim.AdamW(model.parameters(), lr=cfg.lr)
-    strategy = StrategyConfig(name=cfg.strategy)
+    strategy = StrategyConfig(name=cfg.strategy, manifold_weight=cfg.manifold_weight)
 
     for epoch in tqdm(range(cfg.epochs), desc=f"Training ({cfg.strategy})"):
         running_loss = 0.0
@@ -93,7 +97,7 @@ def train(cfg: TrainConfig):
             attention_mask = clean["attention_mask"].to(cfg.device)
             labels = labels.to(cfg.device)
 
-            clean_logits = model(input_ids, attention_mask)
+            clean_logits, aux = model(input_ids, attention_mask, return_aux=True)
 
             if aug is not None:
                 aug_ids = aug["input_ids"].to(cfg.device)
@@ -102,7 +106,13 @@ def train(cfg: TrainConfig):
             else:
                 aug_logits = None
 
-            loss = total_loss(strategy, clean_logits, labels, aug_logits=aug_logits)
+            loss = total_loss(
+                strategy,
+                clean_logits,
+                labels,
+                aug_logits=aug_logits,
+                manifold_loss=aux.get("manifold_loss"),
+            )
 
             optim.zero_grad()
             loss.backward()
@@ -130,6 +140,9 @@ if __name__ == "__main__":
     p.add_argument("--batch-size", type=int, default=16)
     p.add_argument("--max-len", type=int, default=256)
     p.add_argument("--device", type=str, default="cpu")
+    p.add_argument("--use-mhc-lite-structure", action="store_true", default=True)
+    p.add_argument("--no-mhc-lite-structure", action="store_false", dest="use_mhc_lite_structure")
+    p.add_argument("--manifold-weight", type=float, default=0.05)
     args = p.parse_args()
 
     train(
@@ -141,5 +154,7 @@ if __name__ == "__main__":
             batch_size=args.batch_size,
             max_len=args.max_len,
             device=args.device,
+            use_mhc_lite_structure=args.use_mhc_lite_structure,
+            manifold_weight=args.manifold_weight,
         )
     )
