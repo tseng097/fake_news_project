@@ -36,6 +36,13 @@ class SentimentShiftSimpleTests(unittest.TestCase):
 
 class LexicalMhcLiteSafetyTests(unittest.TestCase):
     @patch("src.augment.wn")
+    def test_lexical_perturb_protects_modifier_pivot_words(self, mock_wn):
+        mock_wn.synsets.side_effect = lambda tok: [_DummySynset(["merely"])] if tok.lower() == "only" else []
+        text = "Only the headline was updated"
+        out = lexical_synonym_perturb(text, budget_ratio=1.0, seed=11)
+        self.assertEqual(out, text)
+
+    @patch("src.augment.wn")
     def test_lexical_perturb_reverts_on_sentiment_sign_flip(self, mock_wn):
         mock_wn.synsets.side_effect = lambda tok: [_DummySynset(["bad"])] if tok.lower() == "good" else []
         text = "This is a good report"

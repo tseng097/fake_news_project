@@ -52,6 +52,25 @@ SENTIMENT_PHRASE_SWAP = {
     "weak evidence": "strong evidence",
 }
 
+# Modifier / negation pivots from adversarial benchmark-style perturbations.
+# Protecting these helps lexical_mhc_lite avoid semantic inversions caused by
+# edits to compositional cues (e.g., "only", "never", "barely").
+MODIFIER_PIVOTS = {
+    "not",
+    "never",
+    "no",
+    "only",
+    "just",
+    "very",
+    "too",
+    "barely",
+    "hardly",
+    "almost",
+    "nearly",
+    "mostly",
+    "slightly",
+}
+
 
 def _tokenize_simple(text: str) -> List[str]:
     return re.findall(r"\w+|[^\w\s]", text, flags=re.UNICODE)
@@ -90,9 +109,11 @@ def lexical_synonym_perturb(
 ) -> str:
     """Lexical perturbation by WordNet synonyms for mHC-lite training.
 
-    Design choice (paper-grounded): we avoid swapping sentiment-bearing lexemes
-    by default, because sentiment cues are a known attack surface in fake-news
-    detection and replacing them can unintentionally drift label semantics.
+    Design choices (paper-grounded):
+    1) avoid swapping sentiment-bearing lexemes because sentiment cues are a
+       known attack surface in fake-news detection and can drift labels;
+    2) avoid swapping modifier/negation pivots (e.g., "only", "never") because
+       adversarial benchmarks show detectors are brittle to compositional cues.
 
     This keeps lexical_mhc_lite focused on lexical paraphrase invariance, while
     sentiment-specific perturbations remain isolated to sentiment_invariance.
@@ -107,7 +128,10 @@ def lexical_synonym_perturb(
 
     # mHC-lite safety rail: do not replace explicitly protected words
     # (e.g., sentiment pivots), reducing augmentation-induced label drift.
-    protected = protected_words if protected_words is not None else set(SENTIMENT_SWAP.keys())
+    # mHC-lite lexical path: merge caller-provided protected words with
+    # built-in sentiment + modifier pivots to reduce label-semantic drift.
+    base_protected = set(SENTIMENT_SWAP.keys()) | MODIFIER_PIVOTS
+    protected = set(protected_words) | base_protected if protected_words is not None else base_protected
 
     word_positions = [
         i
