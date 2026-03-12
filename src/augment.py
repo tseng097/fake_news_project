@@ -189,23 +189,27 @@ def style_reframe_simple(text: str) -> str:
     return out
 
 
-def sentiment_shift_simple(text: str, budget_ratio: float = 0.2) -> str:
+def sentiment_shift_simple(text: str, budget_ratio: float = 0.2, seed: int | None = None) -> str:
     """Controlled sentiment swapping (AdSent-style proxy without LLM API).
 
     Compared with the previous token-only version, this introduces:
     1) phrase-level swaps for stronger sentiment perturbations,
-    2) a replacement budget so perturbations stay controlled.
+    2) a replacement budget so perturbations stay controlled,
+    3) seedable stochastic selection for attack diversity.
 
-    This better matches "controlled sentiment attacks" used in recent
-    fake-news robustness work while keeping implementation lightweight.
+    The seed option is useful for reproducible ablations while still supporting
+    diverse sentiment attacks across training samples.
     """
     budget_ratio = min(max(budget_ratio, 0.0), 1.0)
     swap_budget = max(1, int(len(_tokenize_simple(text)) * budget_ratio))
+    rng = random.Random(seed)
 
     # Phase 1: phrase-level swaps (case-insensitive, bounded by budget)
     phrase_hits = 0
     shifted = text
-    for src, dst in SENTIMENT_PHRASE_SWAP.items():
+    phrase_items = list(SENTIMENT_PHRASE_SWAP.items())
+    rng.shuffle(phrase_items)
+    for src, dst in phrase_items:
         if phrase_hits >= swap_budget:
             break
         pattern = re.compile(rf"\b{re.escape(src)}\b", flags=re.IGNORECASE)
@@ -221,16 +225,18 @@ def sentiment_shift_simple(text: str, budget_ratio: float = 0.2) -> str:
         return shifted
 
     tokens = _tokenize_simple(shifted)
-    out = []
-    token_hits = 0
-    for t in tokens:
+    out = tokens[:]
+    candidate_positions = [
+        i for i, t in enumerate(tokens) if t.lower() in SENTIMENT_SWAP
+    ]
+    rng.shuffle(candidate_positions)
+
+    for pos in candidate_positions[:remaining_budget]:
+        t = tokens[pos]
         low = t.lower()
-        if token_hits < remaining_budget and low in SENTIMENT_SWAP:
-            r = SENTIMENT_SWAP[low]
-            if t and t[0].isupper():
-                r = r.capitalize()
-            out.append(r)
-            token_hits += 1
-        else:
-            out.append(t)
+        r = SENTIMENT_SWAP[low]
+        if t and t[0].isupper():
+            r = r.capitalize()
+        out[pos] = r
+
     return _detokenize_simple(out)

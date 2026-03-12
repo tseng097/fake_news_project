@@ -23,15 +23,27 @@ class _DummySynset:
 class SentimentShiftSimpleTests(unittest.TestCase):
     def test_phrase_level_swap_applies(self):
         text = "The claim is not good and was widely praised yesterday."
-        out = sentiment_shift_simple(text, budget_ratio=0.4)
+        out = sentiment_shift_simple(text, budget_ratio=0.4, seed=1)
         self.assertIn("very bad", out.lower())
         self.assertIn("widely criticized", out.lower())
 
     def test_budget_limits_replacements(self):
         text = "good great excellent positive success"
-        out = sentiment_shift_simple(text, budget_ratio=0.2)
+        out = sentiment_shift_simple(text, budget_ratio=0.2, seed=9)
         changed = sum(1 for w in ["bad", "terrible", "awful", "negative", "failure"] if w in out.lower())
         self.assertLessEqual(changed, 1)
+
+    def test_seed_makes_sentiment_attack_deterministic(self):
+        text = "good great excellent positive success benefit"
+        out1 = sentiment_shift_simple(text, budget_ratio=0.5, seed=42)
+        out2 = sentiment_shift_simple(text, budget_ratio=0.5, seed=42)
+        self.assertEqual(out1, out2)
+
+    def test_different_seed_changes_attack_pattern(self):
+        text = "good great excellent positive success benefit"
+        out1 = sentiment_shift_simple(text, budget_ratio=0.5, seed=1)
+        out2 = sentiment_shift_simple(text, budget_ratio=0.5, seed=2)
+        self.assertNotEqual(out1, out2)
 
 
 class LexicalMhcLiteSafetyTests(unittest.TestCase):
