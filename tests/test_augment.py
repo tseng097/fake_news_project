@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from src.augment import lexical_synonym_perturb, sentiment_shift_simple
+from src.augment import lexical_synonym_perturb, sentiment_shift_simple, style_reframe_simple
 
 
 class _DummyLemma:
@@ -44,6 +44,21 @@ class SentimentShiftSimpleTests(unittest.TestCase):
         out1 = sentiment_shift_simple(text, budget_ratio=0.5, seed=1)
         out2 = sentiment_shift_simple(text, budget_ratio=0.5, seed=2)
         self.assertNotEqual(out1, out2)
+
+
+class StyleReframeSimpleTests(unittest.TestCase):
+    def test_style_reframe_normalizes_all_caps_and_punctuation(self):
+        text = "BREAKING NEWS!!!! THIS REPORT IS SHOCKING!!"
+        out = style_reframe_simple(text)
+        self.assertIn("breaking news!", out)
+        self.assertIn("this report is shocking!", out)
+
+    def test_style_reframe_preserves_common_acronyms(self):
+        text = "USA OFFICIALS SAID IT'S TRUE!!!"
+        out = style_reframe_simple(text)
+        self.assertIn("USA", out)
+        self.assertIn("officials said", out)
+        self.assertIn("it is", out)
 
 
 class LexicalMhcLiteSafetyTests(unittest.TestCase):

@@ -177,13 +177,33 @@ def lexical_synonym_perturb(
 
 
 def style_reframe_simple(text: str) -> str:
-    """Lightweight style reframing (SheepDog-style proxy without LLM API)."""
+    """Lightweight style reframing (SheepDog-style proxy without LLM API).
+
+    Rationale (paper-grounded): fake-news detectors can overuse stylistic cues
+    (e.g., all-caps emphasis, exaggerated punctuation) rather than factual
+    consistency. This normalizer removes a small set of high-variance style
+    markers while keeping proposition content unchanged.
+    """
     out = text
     for k, v in CONTRACTIONS.items():
-        out = out.replace(k, v)
+        out = re.sub(re.escape(k), v, out, flags=re.IGNORECASE)
+
+    # Normalize sensational all-caps words (>=4 chars) while preserving common
+    # short acronyms that often carry factual meaning.
+    acronym_whitelist = {"USA", "UK", "EU", "UN", "NATO", "FBI", "CIA"}
+
+    def _caps_norm(match: re.Match[str]) -> str:
+        token = match.group(0)
+        if token in acronym_whitelist:
+            return token
+        return token.lower()
+
+    out = re.sub(r"\b[A-Z]{2,}\b", _caps_norm, out)
+
     # reduce emphatic punctuation style
     out = re.sub(r"!{2,}", "!", out)
     out = re.sub(r"\?{2,}", "?", out)
+
     # normalize repeated spaces
     out = re.sub(r"\s+", " ", out).strip()
     return out
