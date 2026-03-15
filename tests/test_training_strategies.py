@@ -8,7 +8,13 @@ except ModuleNotFoundError:  # pragma: no cover - env dependency guard
 if torch is None:
     raise unittest.SkipTest("torch is not installed in this environment")
 
-from src.training_strategies import StrategyConfig, consistency_kl, consistency_kl_symmetric, total_loss
+from src.training_strategies import (
+    StrategyConfig,
+    consistency_js,
+    consistency_kl,
+    consistency_kl_symmetric,
+    total_loss,
+)
 
 
 class TrainingStrategyLossTests(unittest.TestCase):
@@ -36,6 +42,20 @@ class TrainingStrategyLossTests(unittest.TestCase):
 
         # Typically differs unless KL is perfectly symmetric for these logits.
         self.assertFalse(torch.isclose(mhc_loss, style_loss, atol=1e-8))
+
+    def test_sentiment_invariance_defaults_to_js(self):
+        cfg = StrategyConfig(name="sentiment_invariance", consistency_weight=0.5, sentiment_use_js=True)
+        base_ce = torch.nn.functional.cross_entropy(self.clean_logits, self.labels)
+        expected = base_ce + 0.5 * consistency_js(self.clean_logits, self.aug_logits)
+        got = total_loss(cfg, self.clean_logits, self.labels, aug_logits=self.aug_logits)
+        self.assertTrue(torch.isclose(got, expected, atol=1e-7))
+
+    def test_sentiment_invariance_can_fallback_to_directional_kl(self):
+        cfg = StrategyConfig(name="sentiment_invariance", consistency_weight=0.5, sentiment_use_js=False)
+        base_ce = torch.nn.functional.cross_entropy(self.clean_logits, self.labels)
+        expected = base_ce + 0.5 * consistency_kl(self.clean_logits, self.aug_logits)
+        got = total_loss(cfg, self.clean_logits, self.labels, aug_logits=self.aug_logits)
+        self.assertTrue(torch.isclose(got, expected, atol=1e-7))
 
 
 if __name__ == "__main__":

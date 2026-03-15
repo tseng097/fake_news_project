@@ -9,6 +9,7 @@ class StrategyConfig:
     name: str = "vanilla"  # vanilla|lexical_mhc_lite|style_invariance|sentiment_invariance
     consistency_weight: float = 0.5
     manifold_weight: float = 0.05
+    sentiment_use_js: bool = True
 
 
 def classification_loss(logits, labels):
@@ -33,6 +34,24 @@ def consistency_kl_symmetric(clean_logits, aug_logits):
         consistency_kl(clean_logits, aug_logits)
         + consistency_kl(aug_logits, clean_logits)
     )
+
+
+def consistency_js(clean_logits, aug_logits):
+    """Jensen-Shannon divergence between clean and augmented predictions.
+
+    We use this for sentiment_invariance as a bounded, symmetric consistency loss.
+    It is numerically stable for strong sentiment perturbations where directional
+    KL can become over-confident in one direction.
+    """
+    p = F.softmax(clean_logits, dim=-1)
+    q = F.softmax(aug_logits, dim=-1)
+    m = 0.5 * (p + q)
+
+    log_m = torch.log(m.clamp_min(1e-12))
+
+    kl_pm = F.kl_div(log_m, p, reduction="batchmean")
+    kl_qm = F.kl_div(log_m, q, reduction="batchmean")
+    return 0.5 * (kl_pm + kl_qm)
 
 
 def total_loss(strategy: StrategyConfig, clean_logits, labels, aug_logits=None, manifold_loss=None):
@@ -70,7 +89,12 @@ def total_loss(strategy: StrategyConfig, clean_logits, labels, aug_logits=None, 
     if strategy.name == "vanilla" or aug_logits is None:
         base = ce
     elif strategy.name == "lexical_mhc_lite":
+        # mHC-lite main line: symmetric lexical consistency under synonym perturbations.
         base = ce + strategy.consistency_weight * consistency_kl_symmetric(clean_logits, aug_logits)
+    elif strategy.name == "sentiment_invariance" and strategy.sentiment_use_js:
+        # Paper-grounded tweak (AdSent): keep veracity stable under sentiment flips
+        # using a symmetric divergence instead of one-way KL.
+        base = ce + strategy.consistency_weight * consistency_js(clean_logits, aug_logits)
     else:
         base = ce + strategy.consistency_weight * consistency_kl(clean_logits, aug_logits)
 
