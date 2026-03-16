@@ -60,6 +60,13 @@ class StyleReframeSimpleTests(unittest.TestCase):
         self.assertIn("officials said", out)
         self.assertIn("it is", out)
 
+    def test_style_reframe_reduces_elongated_spellings(self):
+        text = "This is sooooo SHOCKING!!!"
+        out = style_reframe_simple(text)
+        self.assertIn("soo", out.lower())
+        self.assertNotIn("sooooo", out.lower())
+        self.assertIn("shocking!", out.lower())
+
 
 class LexicalMhcLiteSafetyTests(unittest.TestCase):
     @patch("src.augment.wn")

@@ -180,9 +180,9 @@ def style_reframe_simple(text: str) -> str:
     """Lightweight style reframing (SheepDog-style proxy without LLM API).
 
     Rationale (paper-grounded): fake-news detectors can overuse stylistic cues
-    (e.g., all-caps emphasis, exaggerated punctuation) rather than factual
-    consistency. This normalizer removes a small set of high-variance style
-    markers while keeping proposition content unchanged.
+    (e.g., all-caps emphasis, exaggerated punctuation, elongated spellings)
+    rather than factual consistency. This normalizer removes a small set of
+    high-variance style markers while keeping proposition content unchanged.
     """
     out = text
     for k, v in CONTRACTIONS.items():
@@ -203,6 +203,10 @@ def style_reframe_simple(text: str) -> str:
     # reduce emphatic punctuation style
     out = re.sub(r"!{2,}", "!", out)
     out = re.sub(r"\?{2,}", "?", out)
+
+    # normalize exaggerated elongated spellings common in sensational rewrites
+    # (e.g., "soooo shocking" -> "soo shocking") while preserving readability.
+    out = re.sub(r"([A-Za-z])\1{2,}", r"\1\1", out)
 
     # normalize repeated spaces
     out = re.sub(r"\s+", " ", out).strip()
