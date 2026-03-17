@@ -91,6 +91,21 @@ class LexicalMhcLiteSafetyTests(unittest.TestCase):
         self.assertNotEqual(out, text)
         self.assertIn("solid", out.lower())
 
+    @patch("src.augment.wn")
+    def test_lexical_perturb_preserves_mid_sentence_named_entity(self, mock_wn):
+        def _synsets(tok):
+            if tok.lower() == "biden":
+                return [_DummySynset(["leader"])]
+            if tok.lower() == "announced":
+                return [_DummySynset(["declared"])]
+            return []
+
+        mock_wn.synsets.side_effect = _synsets
+        text = "Yesterday Biden announced new measures"
+        out = lexical_synonym_perturb(text, budget_ratio=1.0, seed=5, protected_words=set())
+        self.assertIn("Biden", out)
+        self.assertIn("declared", out.lower())
+
 
 if __name__ == "__main__":
     unittest.main()

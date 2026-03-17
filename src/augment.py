@@ -101,6 +101,31 @@ def _sentiment_polarity_balance(text: str) -> int:
     return sum((1 if t in pos else -1 if t in neg else 0) for t in tokens)
 
 
+def _looks_like_named_entity(tokens: List[str], idx: int) -> bool:
+    """Heuristic named-entity guard for lexical_mhc_lite.
+
+    Attack papers such as BERT-Attack show lexical substitutions often focus on
+    highly informative tokens. In fake-news detection, those tokens are often
+    named entities (people, organizations, locations), and perturbing them can
+    alter factual claims rather than style/lexical form.
+
+    We therefore avoid replacing TitleCase words that are likely entities,
+    except at sentence start where capitalization is mostly grammatical.
+    """
+    tok = tokens[idx]
+    if not tok.isalpha() or not tok[0].isupper() or len(tok) < 3:
+        return False
+
+    # Sentence-start capitalization is common and usually not entity-specific.
+    if idx == 0:
+        return False
+    prev = tokens[idx - 1]
+    if prev in {".", "!", "?", ":", ";", "\n"}:
+        return False
+
+    return True
+
+
 def lexical_synonym_perturb(
     text: str,
     budget_ratio: float = 0.08,
@@ -136,7 +161,10 @@ def lexical_synonym_perturb(
     word_positions = [
         i
         for i, t in enumerate(tokens)
-        if t.isalpha() and len(t) > 3 and t.lower() not in protected
+        if t.isalpha()
+        and len(t) > 3
+        and t.lower() not in protected
+        and not _looks_like_named_entity(tokens, i)
     ]
     if not word_positions:
         return text
