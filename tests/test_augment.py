@@ -106,6 +106,21 @@ class LexicalMhcLiteSafetyTests(unittest.TestCase):
         self.assertIn("Biden", out)
         self.assertIn("declared", out.lower())
 
+    @patch("src.augment.wn")
+    def test_lexical_perturb_filters_morphologically_incompatible_synonym(self, mock_wn):
+        # "running" should not be replaced by a base-form verb under mHC-lite guard.
+        mock_wn.synsets.side_effect = lambda tok: [_DummySynset(["sprint"])] if tok.lower() == "running" else []
+        text = "The source is running tests"
+        out = lexical_synonym_perturb(text, budget_ratio=1.0, seed=17, protected_words=set())
+        self.assertEqual(out, text)
+
+    @patch("src.augment.wn")
+    def test_lexical_perturb_allows_morphologically_compatible_synonym(self, mock_wn):
+        mock_wn.synsets.side_effect = lambda tok: [_DummySynset(["jogging"])] if tok.lower() == "running" else []
+        text = "The source is running tests"
+        out = lexical_synonym_perturb(text, budget_ratio=1.0, seed=19, protected_words=set())
+        self.assertIn("jogging", out.lower())
+
 
 if __name__ == "__main__":
     unittest.main()

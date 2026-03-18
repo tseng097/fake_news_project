@@ -126,6 +126,42 @@ def _looks_like_named_entity(tokens: List[str], idx: int) -> bool:
     return True
 
 
+def _morph_compatible(source: str, replacement: str) -> bool:
+    """Cheap morphology guard for lexical_mhc_lite synonym swaps.
+
+    CLARE/BAE-style findings emphasize context-aware lexical edits for fluency.
+    This repository stays lightweight (WordNet, no MLM), so we approximate
+    grammatical compatibility by preserving common inflectional shapes.
+
+    Rules are intentionally conservative: if the source token strongly signals
+    an inflection (e.g., *-ing*, *-ed*, plural *-s*), we prefer replacements
+    with matching surface form to avoid obvious grammar drift.
+    """
+    s = source.lower()
+    r = replacement.lower()
+
+    # Preserve clear inflectional morphology when present.
+    if s.endswith("ing") and not r.endswith("ing"):
+        return False
+    if s.endswith("ed") and not r.endswith("ed"):
+        return False
+    if s.endswith("ly") and not r.endswith("ly"):
+        return False
+
+    # Simple plural noun guard (skip short tokens to avoid false positives).
+    if len(s) > 4 and s.endswith("s") and not s.endswith("ss"):
+        if not r.endswith("s"):
+            return False
+
+    # Prevent extreme token-length jumps that often look unnatural.
+    if len(source) > 0:
+        ratio = len(replacement) / len(source)
+        if ratio < 0.5 or ratio > 2.0:
+            return False
+
+    return True
+
+
 def lexical_synonym_perturb(
     text: str,
     budget_ratio: float = 0.08,
@@ -180,7 +216,14 @@ def lexical_synonym_perturb(
         lemmas = []
         for s in synsets:
             lemmas.extend([l.name().replace("_", " ") for l in s.lemmas()])
-        lemmas = [w for w in lemmas if w.lower() != tok.lower() and w.isalpha() and w.lower() not in protected]
+        lemmas = [
+            w
+            for w in lemmas
+            if w.lower() != tok.lower()
+            and w.isalpha()
+            and w.lower() not in protected
+            and _morph_compatible(tok, w)
+        ]
         if not lemmas:
             continue
         replacement = rng.choice(lemmas)
