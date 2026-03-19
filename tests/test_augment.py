@@ -121,6 +121,28 @@ class LexicalMhcLiteSafetyTests(unittest.TestCase):
         out = lexical_synonym_perturb(text, budget_ratio=1.0, seed=19, protected_words=set())
         self.assertIn("jogging", out.lower())
 
+    @patch("src.augment.wn")
+    def test_lexical_perturb_protects_quantity_adjacent_anchor(self, mock_wn):
+        mock_wn.synsets.side_effect = lambda tok: [_DummySynset(["trillion"])] if tok.lower() == "million" else []
+        text = "The report claims 5 million users"
+        out = lexical_synonym_perturb(text, budget_ratio=1.0, seed=23, protected_words=set())
+        self.assertEqual(out, text)
+
+    @patch("src.augment.wn")
+    def test_lexical_perturb_can_edit_when_not_quantity_adjacent(self, mock_wn):
+        def _synsets(tok):
+            if tok.lower() == "reliable":
+                return [_DummySynset(["trustworthy"])]
+            if tok.lower() == "million":
+                return [_DummySynset(["trillion"])]
+            return []
+
+        mock_wn.synsets.side_effect = _synsets
+        text = "A reliable report cites 5 million users"
+        out = lexical_synonym_perturb(text, budget_ratio=1.0, seed=29, protected_words=set())
+        self.assertIn("trustworthy", out.lower())
+        self.assertIn("million", out.lower())
+
 
 if __name__ == "__main__":
     unittest.main()

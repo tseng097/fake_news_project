@@ -126,6 +126,28 @@ def _looks_like_named_entity(tokens: List[str], idx: int) -> bool:
     return True
 
 
+def _is_numeric_token(tok: str) -> bool:
+    """Return True for simple number-like tokens (e.g., 42, 3.14, 10,000, 50%)."""
+    return bool(re.fullmatch(r"\d+[\d,]*(?:\.\d+)?%?", tok))
+
+
+def _near_numeric_context(tokens: List[str], idx: int) -> bool:
+    """Guard claim anchors around quantities for mHC-lite lexical perturbation.
+
+    Robustness-verification studies on credibility/fake-news classifiers show
+    small lexical edits near claim-critical spans can disproportionately change
+    decisions. Numbers and their neighboring unit words are frequent anchors in
+    factual claims (e.g., "5 million", "12 percent", "2024 election").
+
+    For lexical_mhc_lite we keep this conservative: if a token is adjacent to a
+    number-like token, we avoid replacing it to reduce accidental fact drift
+    while still learning lexical invariance elsewhere.
+    """
+    left = idx > 0 and _is_numeric_token(tokens[idx - 1])
+    right = idx < len(tokens) - 1 and _is_numeric_token(tokens[idx + 1])
+    return left or right
+
+
 def _morph_compatible(source: str, replacement: str) -> bool:
     """Cheap morphology guard for lexical_mhc_lite synonym swaps.
 
@@ -201,6 +223,7 @@ def lexical_synonym_perturb(
         and len(t) > 3
         and t.lower() not in protected
         and not _looks_like_named_entity(tokens, i)
+        and not _near_numeric_context(tokens, i)
     ]
     if not word_positions:
         return text
