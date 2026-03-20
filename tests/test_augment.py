@@ -67,6 +67,14 @@ class StyleReframeSimpleTests(unittest.TestCase):
         self.assertNotIn("sooooo", out.lower())
         self.assertIn("shocking!", out.lower())
 
+    def test_style_reframe_normalizes_urls_and_mentions(self):
+        text = "BREAKING!!! Read https://example.com NOW @Reporter"
+        out = style_reframe_simple(text)
+        self.assertIn("<url>", out)
+        self.assertIn("<user>", out)
+        self.assertNotIn("https://example.com", out)
+        self.assertNotIn("@Reporter", out)
+
 
 class LexicalMhcLiteSafetyTests(unittest.TestCase):
     @patch("src.augment.wn")

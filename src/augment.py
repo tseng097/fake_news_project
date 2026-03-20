@@ -277,8 +277,17 @@ def style_reframe_simple(text: str) -> str:
     (e.g., all-caps emphasis, exaggerated punctuation, elongated spellings)
     rather than factual consistency. This normalizer removes a small set of
     high-variance style markers while keeping proposition content unchanged.
+
+    Extra robustness tweak: normalize volatile social-media wrappers (URLs,
+    @mentions) to placeholders. Domain/style robustness studies (e.g., MDFEND)
+    suggest source/platform artifacts can become shortcut features.
     """
     out = text
+
+    # Normalize platform wrappers before token-level style edits.
+    out = re.sub(r"https?://\S+|www\.\S+", "<url>", out)
+    out = re.sub(r"@[A-Za-z0-9_]+", "<user>", out)
+
     for k, v in CONTRACTIONS.items():
         out = re.sub(re.escape(k), v, out, flags=re.IGNORECASE)
 
