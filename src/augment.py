@@ -279,7 +279,8 @@ def style_reframe_simple(text: str) -> str:
     high-variance style markers while keeping proposition content unchanged.
 
     Extra robustness tweak: normalize volatile social-media wrappers (URLs,
-    @mentions) to placeholders. Domain/style robustness studies (e.g., MDFEND)
+    @mentions, hashtags, and retweet headers) to placeholders. Domain/style
+    robustness studies (e.g., MDFEND/FakeZero-like cross-platform settings)
     suggest source/platform artifacts can become shortcut features.
     """
     out = text
@@ -287,6 +288,10 @@ def style_reframe_simple(text: str) -> str:
     # Normalize platform wrappers before token-level style edits.
     out = re.sub(r"https?://\S+|www\.\S+", "<url>", out)
     out = re.sub(r"@[A-Za-z0-9_]+", "<user>", out)
+    out = re.sub(r"#[A-Za-z0-9_]+", "<hashtag>", out)
+
+    # Remove social repost headers that are style/platform-specific wrappers.
+    out = re.sub(r"^\s*RT\s+", "", out, flags=re.IGNORECASE)
 
     for k, v in CONTRACTIONS.items():
         out = re.sub(re.escape(k), v, out, flags=re.IGNORECASE)

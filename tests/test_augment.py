@@ -75,6 +75,13 @@ class StyleReframeSimpleTests(unittest.TestCase):
         self.assertNotIn("https://example.com", out)
         self.assertNotIn("@Reporter", out)
 
+    def test_style_reframe_normalizes_hashtags_and_rt_prefix(self):
+        text = "RT BREAKING #Election2026 update from officials"
+        out = style_reframe_simple(text)
+        self.assertNotIn("RT ", out)
+        self.assertIn("<hashtag>", out)
+        self.assertNotIn("#Election2026", out)
+
 
 class LexicalMhcLiteSafetyTests(unittest.TestCase):
     @patch("src.augment.wn")
