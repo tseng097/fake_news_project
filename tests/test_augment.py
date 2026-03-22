@@ -45,6 +45,11 @@ class SentimentShiftSimpleTests(unittest.TestCase):
         out2 = sentiment_shift_simple(text, budget_ratio=0.5, seed=2)
         self.assertNotEqual(out1, out2)
 
+    def test_tone_word_swap_applies(self):
+        text = "A shocking and outrageous claim spread online"
+        out = sentiment_shift_simple(text, budget_ratio=0.5, seed=4)
+        self.assertTrue("ordinary" in out.lower() or "acceptable" in out.lower())
+
 
 class StyleReframeSimpleTests(unittest.TestCase):
     def test_style_reframe_normalizes_all_caps_and_punctuation(self):

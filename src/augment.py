@@ -41,6 +41,21 @@ SENTIMENT_SWAP = {
     "dangerous": "safe",
 }
 
+# Additional tone-bearing sentiment words often used in sensational headlines.
+# This extends sentiment attacks beyond simple polarity lexemes (AdSent-style
+# multi-granular sentiment perturbation) while staying within project scope.
+SENTIMENT_TONE_SWAP = {
+    "shocking": "ordinary",
+    "outrageous": "acceptable",
+    "amazing": "unremarkable",
+    "terrifying": "reassuring",
+    "disaster": "success",
+    "ordinary": "shocking",
+    "acceptable": "outrageous",
+    "unremarkable": "amazing",
+    "reassuring": "terrifying",
+}
+
 # Controlled, phrase-level swaps inspired by adversarial sentiment attacks.
 # Phrase replacements are executed before token-level swaps.
 SENTIMENT_PHRASE_SWAP = {
@@ -358,15 +373,20 @@ def sentiment_shift_simple(text: str, budget_ratio: float = 0.2, seed: int | Non
 
     tokens = _tokenize_simple(shifted)
     out = tokens[:]
+
+    # Merge polarity + tone lexicons for broader sentiment-only perturbations.
+    # This keeps attacks in sentiment space (not factual entity edits), aligned
+    # with sentiment_invariance objectives.
+    sentiment_lexicon = {**SENTIMENT_SWAP, **SENTIMENT_TONE_SWAP}
     candidate_positions = [
-        i for i, t in enumerate(tokens) if t.lower() in SENTIMENT_SWAP
+        i for i, t in enumerate(tokens) if t.lower() in sentiment_lexicon
     ]
     rng.shuffle(candidate_positions)
 
     for pos in candidate_positions[:remaining_budget]:
         t = tokens[pos]
         low = t.lower()
-        r = SENTIMENT_SWAP[low]
+        r = sentiment_lexicon[low]
         if t and t[0].isupper():
             r = r.capitalize()
         out[pos] = r
