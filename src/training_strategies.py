@@ -10,6 +10,10 @@ class StrategyConfig:
     consistency_weight: float = 0.5
     manifold_weight: float = 0.05
     sentiment_use_js: bool = True
+    # Confidence gate for style/sentiment consistency.
+    # Only clean predictions with max-prob >= threshold contribute to
+    # augmentation consistency, reducing noisy invariance pressure.
+    confidence_threshold: float = 0.0
 
 
 def classification_loss(logits, labels):
@@ -54,6 +58,23 @@ def consistency_js(clean_logits, aug_logits):
     return 0.5 * (kl_pm + kl_qm)
 
 
+def _consistency_confidence_scale(clean_logits, threshold: float) -> torch.Tensor:
+    """Return a scalar [0,1] weighting consistency by clean-view confidence.
+
+    Motivation: in adversarial style/sentiment training, some perturbations can
+    become semantically ambiguous. Following confidence-filtering intuition from
+    robust pseudo-labeling, we down-weight consistency when the clean prediction
+    itself is low-confidence.
+    """
+    if threshold <= 0.0:
+        return clean_logits.new_tensor(1.0)
+
+    probs = F.softmax(clean_logits, dim=-1)
+    conf = probs.max(dim=-1).values
+    mask = (conf >= threshold).float()
+    return mask.mean()
+
+
 def total_loss(strategy: StrategyConfig, clean_logits, labels, aug_logits=None, manifold_loss=None):
     """Compute training loss for the allowed strategy scope.
 
@@ -94,9 +115,13 @@ def total_loss(strategy: StrategyConfig, clean_logits, labels, aug_logits=None, 
     elif strategy.name == "sentiment_invariance" and strategy.sentiment_use_js:
         # Paper-grounded tweak (AdSent): keep veracity stable under sentiment flips
         # using a symmetric divergence instead of one-way KL.
-        base = ce + strategy.consistency_weight * consistency_js(clean_logits, aug_logits)
+        conf_scale = _consistency_confidence_scale(clean_logits, strategy.confidence_threshold)
+        base = ce + strategy.consistency_weight * conf_scale * consistency_js(clean_logits, aug_logits)
     else:
-        base = ce + strategy.consistency_weight * consistency_kl(clean_logits, aug_logits)
+        # Style/sentiment branch uses optional confidence gating to avoid forcing
+        # invariance on uncertain clean predictions.
+        conf_scale = _consistency_confidence_scale(clean_logits, strategy.confidence_threshold)
+        base = ce + strategy.consistency_weight * conf_scale * consistency_kl(clean_logits, aug_logits)
 
     # Simple manifold regularization term from mHC-lite structure (if available)
     if manifold_loss is not None:

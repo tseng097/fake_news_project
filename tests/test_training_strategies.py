@@ -57,6 +57,16 @@ class TrainingStrategyLossTests(unittest.TestCase):
         got = total_loss(cfg, self.clean_logits, self.labels, aug_logits=self.aug_logits)
         self.assertTrue(torch.isclose(got, expected, atol=1e-7))
 
+    def test_style_confidence_threshold_can_disable_consistency(self):
+        cfg = StrategyConfig(
+            name="style_invariance",
+            consistency_weight=0.7,
+            confidence_threshold=0.999,  # higher than any sample confidence in this fixture
+        )
+        base_ce = torch.nn.functional.cross_entropy(self.clean_logits, self.labels)
+        got = total_loss(cfg, self.clean_logits, self.labels, aug_logits=self.aug_logits)
+        self.assertTrue(torch.isclose(got, base_ce, atol=1e-7))
+
 
 if __name__ == "__main__":
     unittest.main()

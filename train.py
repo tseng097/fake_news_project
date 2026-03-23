@@ -25,6 +25,7 @@ class TrainConfig:
     device: str = "cpu"
     use_mhc_lite_structure: bool = True
     manifold_weight: float = 0.05
+    consistency_conf_threshold: float = 0.0
 
 
 def _augment_text(text: str, strategy: str) -> str:
@@ -88,7 +89,11 @@ def train(cfg: TrainConfig):
         ModelConfig(backbone=cfg.backbone, use_mhc_lite=cfg.use_mhc_lite_structure)
     ).to(cfg.device)
     optim = torch.optim.AdamW(model.parameters(), lr=cfg.lr)
-    strategy = StrategyConfig(name=cfg.strategy, manifold_weight=cfg.manifold_weight)
+    strategy = StrategyConfig(
+        name=cfg.strategy,
+        manifold_weight=cfg.manifold_weight,
+        confidence_threshold=cfg.consistency_conf_threshold,
+    )
 
     for epoch in tqdm(range(cfg.epochs), desc=f"Training ({cfg.strategy})"):
         running_loss = 0.0
@@ -143,6 +148,7 @@ if __name__ == "__main__":
     p.add_argument("--use-mhc-lite-structure", action="store_true", default=True)
     p.add_argument("--no-mhc-lite-structure", action="store_false", dest="use_mhc_lite_structure")
     p.add_argument("--manifold-weight", type=float, default=0.05)
+    p.add_argument("--consistency-conf-threshold", type=float, default=0.0)
     args = p.parse_args()
 
     train(
@@ -156,5 +162,6 @@ if __name__ == "__main__":
             device=args.device,
             use_mhc_lite_structure=args.use_mhc_lite_structure,
             manifold_weight=args.manifold_weight,
+            consistency_conf_threshold=args.consistency_conf_threshold,
         )
     )
