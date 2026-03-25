@@ -199,6 +199,40 @@ def _morph_compatible(source: str, replacement: str) -> bool:
     return True
 
 
+def _max_wordnet_path_similarity(source: str, replacement: str) -> float:
+    """Approximate semantic closeness for mHC-lite lexical substitutions.
+
+    Motivation: robustness papers repeatedly show that non-semantic-preserving
+    perturbations add noisy invariance pressure. We keep mHC-lite lightweight by
+    using WordNet path similarity as a cheap proxy and discarding very distant
+    substitutions.
+
+    Returns a score in [0, 1] when available; defaults to 1.0 if WordNet
+    similarity is unavailable so existing behavior remains backward-compatible.
+    """
+    if wn is None:
+        return 1.0
+
+    src_synsets = wn.synsets(source)
+    rep_synsets = wn.synsets(replacement)
+    if not src_synsets or not rep_synsets:
+        return 1.0
+
+    best = 0.0
+    for s1 in src_synsets:
+        for s2 in rep_synsets:
+            sim_fn = getattr(s1, "path_similarity", None)
+            if sim_fn is None:
+                # Mocked or limited synset object: preserve prior behavior.
+                return 1.0
+            sim = sim_fn(s2)
+            if sim is None:
+                continue
+            if sim > best:
+                best = sim
+    return best
+
+
 def lexical_synonym_perturb(
     text: str,
     budget_ratio: float = 0.08,
@@ -261,10 +295,21 @@ def lexical_synonym_perturb(
             and w.isalpha()
             and w.lower() not in protected
             and _morph_compatible(tok, w)
+            # mHC-lite lexical guard: keep only semantically close candidates
+            # so consistency regularization is driven by paraphrastic changes.
+            and _max_wordnet_path_similarity(tok, w) >= 0.2
         ]
         if not lemmas:
             continue
-        replacement = rng.choice(lemmas)
+
+        # Prefer semantically closest candidates while preserving stochasticity.
+        scored = sorted(
+            ((w, _max_wordnet_path_similarity(tok, w)) for w in lemmas),
+            key=lambda x: x[1],
+            reverse=True,
+        )
+        top_k = [w for w, _ in scored[: min(3, len(scored))]]
+        replacement = rng.choice(top_k)
         if tok[0].isupper():
             replacement = replacement.capitalize()
         tokens[pos] = replacement

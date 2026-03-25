@@ -13,11 +13,17 @@ class _DummyLemma:
 
 
 class _DummySynset:
-    def __init__(self, names):
+    def __init__(self, names, tag=None, sim_map=None):
         self._names = names
+        self._tag = tag
+        self._sim_map = sim_map or {}
 
     def lemmas(self):
         return [_DummyLemma(n) for n in self._names]
+
+    def path_similarity(self, other):
+        other_tag = getattr(other, "_tag", None)
+        return self._sim_map.get(other_tag, 0.0)
 
 
 class SentimentShiftSimpleTests(unittest.TestCase):
@@ -162,6 +168,24 @@ class LexicalMhcLiteSafetyTests(unittest.TestCase):
         out = lexical_synonym_perturb(text, budget_ratio=1.0, seed=29, protected_words=set())
         self.assertIn("trustworthy", out.lower())
         self.assertIn("million", out.lower())
+
+    @patch("src.augment.wn")
+    def test_lexical_perturb_filters_semantically_distant_synonym(self, mock_wn):
+        def _synsets(tok):
+            low = tok.lower()
+            if low == "reliable":
+                return [_DummySynset(["solid", "banana"], tag="reliable", sim_map={"solid": 0.5, "banana": 0.05})]
+            if low == "solid":
+                return [_DummySynset([], tag="solid")]
+            if low == "banana":
+                return [_DummySynset([], tag="banana")]
+            return []
+
+        mock_wn.synsets.side_effect = _synsets
+        text = "A reliable report described the event"
+        out = lexical_synonym_perturb(text, budget_ratio=1.0, seed=31, protected_words=set())
+        self.assertIn("solid", out.lower())
+        self.assertNotIn("banana", out.lower())
 
 
 if __name__ == "__main__":
