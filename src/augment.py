@@ -86,6 +86,21 @@ MODIFIER_PIVOTS = {
     "slightly",
 }
 
+# mHC-lite discourse pivots: lexical framing studies on credibility detection
+# show connectors (e.g., "however", "despite") can strongly modulate claim
+# stance. We protect them from synonym swaps to keep lexical augmentation in
+# paraphrastic space rather than stance-shifting space.
+DISCOURSE_PIVOTS = {
+    "however",
+    "although",
+    "despite",
+    "but",
+    "yet",
+    "nevertheless",
+    "nonetheless",
+    "whereas",
+}
+
 
 def _tokenize_simple(text: str) -> List[str]:
     return re.findall(r"\w+|[^\w\s]", text, flags=re.UNICODE)
@@ -259,10 +274,11 @@ def lexical_synonym_perturb(
     tokens = _tokenize_simple(text)
 
     # mHC-lite safety rail: do not replace explicitly protected words
-    # (e.g., sentiment pivots), reducing augmentation-induced label drift.
+    # (e.g., sentiment/modifier/discourse pivots), reducing augmentation-induced
+    # label drift and stance flips from lexical framing edits.
     # mHC-lite lexical path: merge caller-provided protected words with
-    # built-in sentiment + modifier pivots to reduce label-semantic drift.
-    base_protected = set(SENTIMENT_SWAP.keys()) | MODIFIER_PIVOTS
+    # built-in pivot lexicons to keep perturbations semantically conservative.
+    base_protected = set(SENTIMENT_SWAP.keys()) | MODIFIER_PIVOTS | DISCOURSE_PIVOTS
     protected = set(protected_words) | base_protected if protected_words is not None else base_protected
 
     word_positions = [

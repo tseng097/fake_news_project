@@ -103,6 +103,13 @@ class LexicalMhcLiteSafetyTests(unittest.TestCase):
         self.assertEqual(out, text)
 
     @patch("src.augment.wn")
+    def test_lexical_perturb_protects_discourse_pivot_words(self, mock_wn):
+        mock_wn.synsets.side_effect = lambda tok: [_DummySynset(["nonetheless"])] if tok.lower() == "however" else []
+        text = "However the claim remained unsupported"
+        out = lexical_synonym_perturb(text, budget_ratio=1.0, seed=13, protected_words=set())
+        self.assertEqual(out, text)
+
+    @patch("src.augment.wn")
     def test_lexical_perturb_reverts_on_sentiment_sign_flip(self, mock_wn):
         mock_wn.synsets.side_effect = lambda tok: [_DummySynset(["bad"])] if tok.lower() == "good" else []
         text = "This is a good report"
