@@ -93,6 +93,20 @@ class StyleReframeSimpleTests(unittest.TestCase):
         self.assertIn("<hashtag>", out)
         self.assertNotIn("#Election2026", out)
 
+    def test_style_reframe_normalizes_unicode_punctuation(self):
+        text = "“Breaking” update — details coming…"
+        out = style_reframe_simple(text)
+        self.assertIn('"Breaking"', out)
+        self.assertIn("- details coming...", out)
+
+    def test_style_reframe_strips_markdown_and_clickbait_prefix(self):
+        text = "[BREAKING] **SHOCKING** _claim_ was posted"
+        out = style_reframe_simple(text)
+        self.assertNotIn("[BREAKING]", out)
+        self.assertNotIn("**", out)
+        self.assertNotIn("_", out)
+        self.assertIn("shocking", out.lower())
+
 
 class LexicalMhcLiteSafetyTests(unittest.TestCase):
     @patch("src.augment.wn")

@@ -24,6 +24,21 @@ CONTRACTIONS = {
     "aren't": "are not",
 }
 
+# Style-attack text often includes Unicode typography and markdown wrappers to
+# mimic outlet-specific voice. We normalize these to reduce superficial style
+# cues while preserving proposition-level content.
+STYLE_CHAR_NORMALIZATION = str.maketrans(
+    {
+        "“": '"',
+        "”": '"',
+        "‘": "'",
+        "’": "'",
+        "–": "-",
+        "—": "-",
+        "…": "...",
+    }
+)
+
 SENTIMENT_SWAP = {
     "good": "bad",
     "great": "terrible",
@@ -359,7 +374,7 @@ def style_reframe_simple(text: str) -> str:
     robustness studies (e.g., MDFEND/FakeZero-like cross-platform settings)
     suggest source/platform artifacts can become shortcut features.
     """
-    out = text
+    out = text.translate(STYLE_CHAR_NORMALIZATION)
 
     # Normalize platform wrappers before token-level style edits.
     out = re.sub(r"https?://\S+|www\.\S+", "<url>", out)
@@ -368,6 +383,14 @@ def style_reframe_simple(text: str) -> str:
 
     # Remove social repost headers that are style/platform-specific wrappers.
     out = re.sub(r"^\s*RT\s+", "", out, flags=re.IGNORECASE)
+
+    # Strip markdown emphasis wrappers (e.g., **shocking**, _urgent_, ~~fake~~)
+    # often used in style-conversion attacks; keep the inner lexical content.
+    out = re.sub(r"(\*\*|__|\*|_|~~)(\S(?:.*?\S)?)\1", r"\2", out)
+
+    # Remove leading bracketed clickbait wrappers such as [BREAKING] or
+    # (EXCLUSIVE), which are high-variance style cues.
+    out = re.sub(r"^\s*[\[(][A-Za-z\s]{3,30}[\])]\s*", "", out)
 
     for k, v in CONTRACTIONS.items():
         out = re.sub(re.escape(k), v, out, flags=re.IGNORECASE)
