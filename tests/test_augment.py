@@ -107,6 +107,18 @@ class StyleReframeSimpleTests(unittest.TestCase):
         self.assertNotIn("_", out)
         self.assertIn("shocking", out.lower())
 
+    def test_style_reframe_removes_leading_section_label(self):
+        text = "OPINION: BREAKING CLAIM spreads quickly online"
+        out = style_reframe_simple(text)
+        self.assertFalse(out.lower().startswith("opinion:"))
+        self.assertIn("breaking claim", out.lower())
+
+    def test_style_reframe_removes_fact_check_label_with_spacing(self):
+        text = "FACT CHECK : This post is going viral"
+        out = style_reframe_simple(text)
+        self.assertFalse(out.lower().startswith("fact check"))
+        self.assertIn("this post is going viral", out.lower())
+
 
 class LexicalMhcLiteSafetyTests(unittest.TestCase):
     @patch("src.augment.wn")

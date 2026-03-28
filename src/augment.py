@@ -373,6 +373,11 @@ def style_reframe_simple(text: str) -> str:
     @mentions, hashtags, and retweet headers) to placeholders. Domain/style
     robustness studies (e.g., MDFEND/FakeZero-like cross-platform settings)
     suggest source/platform artifacts can become shortcut features.
+
+    2026-03 enhancement (paper-driven): strip leading section-label wrappers
+    such as "BREAKING:", "OPINION:", "ANALYSIS:" and "FACT CHECK:". Recent
+    stylometric disinformation work highlights these as high-signal style cues
+    that can become detector shortcuts across outlets/domains.
     """
     out = text.translate(STYLE_CHAR_NORMALIZATION)
 
@@ -383,6 +388,15 @@ def style_reframe_simple(text: str) -> str:
 
     # Remove social repost headers that are style/platform-specific wrappers.
     out = re.sub(r"^\s*RT\s+", "", out, flags=re.IGNORECASE)
+
+    # Normalize outlet-style section labels at the start of the message.
+    # Examples: "BREAKING:", "OPINION:", "ANALYSIS:", "FACT CHECK:".
+    out = re.sub(
+        r"^\s*(breaking|opinion|analysis|exclusive|fact\s*check|live\s*update)\s*:\s*",
+        "",
+        out,
+        flags=re.IGNORECASE,
+    )
 
     # Strip markdown emphasis wrappers (e.g., **shocking**, _urgent_, ~~fake~~)
     # often used in style-conversion attacks; keep the inner lexical content.
