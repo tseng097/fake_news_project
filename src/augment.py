@@ -116,6 +116,25 @@ DISCOURSE_PIVOTS = {
     "whereas",
 }
 
+# mHC-lite semantic pivots: quantifiers/comparatives often encode the factual
+# scope or direction of a claim (e.g., "many" vs "few", "more" vs "less").
+# Adversarial benchmark work on fake-news detection highlights classifier
+# brittleness to compositional meaning changes in exactly these operators.
+# We therefore keep them protected in lexical synonym perturbation so mHC-lite
+# learns paraphrastic invariance without accidental claim-logic flips.
+QUANTIFIER_COMPARATIVE_PIVOTS = {
+    "many",
+    "several",
+    "few",
+    "most",
+    "more",
+    "less",
+    "least",
+    "fewer",
+    "majority",
+    "minority",
+}
+
 
 def _tokenize_simple(text: str) -> List[str]:
     return re.findall(r"\w+|[^\w\s]", text, flags=re.UNICODE)
@@ -275,7 +294,9 @@ def lexical_synonym_perturb(
     1) avoid swapping sentiment-bearing lexemes because sentiment cues are a
        known attack surface in fake-news detection and can drift labels;
     2) avoid swapping modifier/negation pivots (e.g., "only", "never") because
-       adversarial benchmarks show detectors are brittle to compositional cues.
+       adversarial benchmarks show detectors are brittle to compositional cues;
+    3) avoid swapping quantifier/comparative pivots (e.g., "many", "more",
+       "less", "majority") because these often encode claim logic/scope.
 
     This keeps lexical_mhc_lite focused on lexical paraphrase invariance, while
     sentiment-specific perturbations remain isolated to sentiment_invariance.
@@ -293,7 +314,12 @@ def lexical_synonym_perturb(
     # label drift and stance flips from lexical framing edits.
     # mHC-lite lexical path: merge caller-provided protected words with
     # built-in pivot lexicons to keep perturbations semantically conservative.
-    base_protected = set(SENTIMENT_SWAP.keys()) | MODIFIER_PIVOTS | DISCOURSE_PIVOTS
+    base_protected = (
+        set(SENTIMENT_SWAP.keys())
+        | MODIFIER_PIVOTS
+        | DISCOURSE_PIVOTS
+        | QUANTIFIER_COMPARATIVE_PIVOTS
+    )
     protected = set(protected_words) | base_protected if protected_words is not None else base_protected
 
     word_positions = [

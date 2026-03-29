@@ -136,6 +136,21 @@ class LexicalMhcLiteSafetyTests(unittest.TestCase):
         self.assertEqual(out, text)
 
     @patch("src.augment.wn")
+    def test_lexical_perturb_protects_quantifier_comparative_pivots(self, mock_wn):
+        def _synsets(tok):
+            if tok.lower() == "many":
+                return [_DummySynset(["numerous"])]
+            if tok.lower() == "reports":
+                return [_DummySynset(["records"])]
+            return []
+
+        mock_wn.synsets.side_effect = _synsets
+        text = "Many reports described the claim"
+        out = lexical_synonym_perturb(text, budget_ratio=1.0, seed=41, protected_words=set())
+        # "many" should be protected; non-pivot words can still be perturbed.
+        self.assertIn("many", out.lower())
+
+    @patch("src.augment.wn")
     def test_lexical_perturb_reverts_on_sentiment_sign_flip(self, mock_wn):
         mock_wn.synsets.side_effect = lambda tok: [_DummySynset(["bad"])] if tok.lower() == "good" else []
         text = "This is a good report"
