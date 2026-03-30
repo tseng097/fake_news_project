@@ -181,6 +181,22 @@ class LexicalMhcLiteSafetyTests(unittest.TestCase):
         self.assertIn("declared", out.lower())
 
     @patch("src.augment.wn")
+    def test_lexical_perturb_preserves_sentence_initial_acronym_entity(self, mock_wn):
+        def _synsets(tok):
+            if tok == "NASA":
+                return [_DummySynset(["agency"])]
+            if tok.lower() == "announced":
+                return [_DummySynset(["declared"])]
+            return []
+
+        mock_wn.synsets.side_effect = _synsets
+        text = "NASA announced a new launch window"
+        out = lexical_synonym_perturb(text, budget_ratio=1.0, seed=6, protected_words=set())
+        # mHC-lite guard should preserve the acronym entity anchor.
+        self.assertIn("NASA", out)
+        self.assertIn("declared", out.lower())
+
+    @patch("src.augment.wn")
     def test_lexical_perturb_filters_morphologically_incompatible_synonym(self, mock_wn):
         # "running" should not be replaced by a base-form verb under mHC-lite guard.
         mock_wn.synsets.side_effect = lambda tok: [_DummySynset(["sprint"])] if tok.lower() == "running" else []

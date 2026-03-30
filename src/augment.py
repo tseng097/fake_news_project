@@ -173,12 +173,20 @@ def _looks_like_named_entity(tokens: List[str], idx: int) -> bool:
     named entities (people, organizations, locations), and perturbing them can
     alter factual claims rather than style/lexical form.
 
-    We therefore avoid replacing TitleCase words that are likely entities,
-    except at sentence start where capitalization is mostly grammatical.
+    We therefore avoid replacing likely entities. Sentence-start TitleCase words
+    are usually grammatical capitalization and are allowed, but uppercase
+    acronyms (e.g., "NASA", "FBI") are always protected because they are often
+    entity anchors even at sentence start.
     """
     tok = tokens[idx]
     if not tok.isalpha() or not tok[0].isupper() or len(tok) < 3:
         return False
+
+    # mHC-lite entity safety: preserve all-uppercase acronyms regardless of
+    # position. Cross-domain adversarial fake-news studies show entity-level
+    # shifts can induce brittle shortcuts; protecting acronyms reduces fact drift.
+    if tok.isupper():
+        return True
 
     # Sentence-start capitalization is common and usually not entity-specific.
     if idx == 0:
