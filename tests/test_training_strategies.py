@@ -44,14 +44,24 @@ class TrainingStrategyLossTests(unittest.TestCase):
         self.assertFalse(torch.isclose(mhc_loss, style_loss, atol=1e-8))
 
     def test_sentiment_invariance_defaults_to_js(self):
-        cfg = StrategyConfig(name="sentiment_invariance", consistency_weight=0.5, sentiment_use_js=True)
+        cfg = StrategyConfig(
+            name="sentiment_invariance",
+            consistency_weight=0.5,
+            sentiment_use_js=True,
+            adaptive_consistency_focus=False,
+        )
         base_ce = torch.nn.functional.cross_entropy(self.clean_logits, self.labels)
         expected = base_ce + 0.5 * consistency_js(self.clean_logits, self.aug_logits)
         got = total_loss(cfg, self.clean_logits, self.labels, aug_logits=self.aug_logits)
         self.assertTrue(torch.isclose(got, expected, atol=1e-7))
 
     def test_sentiment_invariance_can_fallback_to_directional_kl(self):
-        cfg = StrategyConfig(name="sentiment_invariance", consistency_weight=0.5, sentiment_use_js=False)
+        cfg = StrategyConfig(
+            name="sentiment_invariance",
+            consistency_weight=0.5,
+            sentiment_use_js=False,
+            adaptive_consistency_focus=False,
+        )
         base_ce = torch.nn.functional.cross_entropy(self.clean_logits, self.labels)
         expected = base_ce + 0.5 * consistency_kl(self.clean_logits, self.aug_logits)
         got = total_loss(cfg, self.clean_logits, self.labels, aug_logits=self.aug_logits)
@@ -66,6 +76,25 @@ class TrainingStrategyLossTests(unittest.TestCase):
         base_ce = torch.nn.functional.cross_entropy(self.clean_logits, self.labels)
         got = total_loss(cfg, self.clean_logits, self.labels, aug_logits=self.aug_logits)
         self.assertTrue(torch.isclose(got, base_ce, atol=1e-7))
+
+    def test_adaptive_focus_increases_sentiment_consistency_penalty(self):
+        base_cfg = StrategyConfig(
+            name="sentiment_invariance",
+            consistency_weight=0.5,
+            sentiment_use_js=True,
+            adaptive_consistency_focus=False,
+        )
+        focus_cfg = StrategyConfig(
+            name="sentiment_invariance",
+            consistency_weight=0.5,
+            sentiment_use_js=True,
+            adaptive_consistency_focus=True,
+            adaptive_focus_max_scale=1.5,
+        )
+
+        base_loss = total_loss(base_cfg, self.clean_logits, self.labels, aug_logits=self.aug_logits)
+        focus_loss = total_loss(focus_cfg, self.clean_logits, self.labels, aug_logits=self.aug_logits)
+        self.assertGreater(focus_loss.item(), base_loss.item())
 
 
 if __name__ == "__main__":

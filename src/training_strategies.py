@@ -14,6 +14,12 @@ class StrategyConfig:
     # Only clean predictions with max-prob >= threshold contribute to
     # augmentation consistency, reducing noisy invariance pressure.
     confidence_threshold: float = 0.0
+    # Optional hard-example emphasis for style/sentiment invariance.
+    # Inspired by adversarial group-reweighting ideas (e.g., AdComment/IDR):
+    # increase consistency pressure when clean/aug predictions diverge more.
+    adaptive_consistency_focus: bool = True
+    # Upper bound on adaptive scaling to avoid destabilizing optimization.
+    adaptive_focus_max_scale: float = 1.5
 
 
 def classification_loss(logits, labels):
@@ -75,6 +81,32 @@ def _consistency_confidence_scale(clean_logits, threshold: float) -> torch.Tenso
     return mask.mean()
 
 
+def _adaptive_consistency_focus_scale(
+    clean_logits,
+    aug_logits,
+    enabled: bool,
+    max_scale: float,
+) -> torch.Tensor:
+    """Return a detached scalar >=1 emphasizing harder style/sentiment pairs.
+
+    Paper grounding: robust fake-news work with adversarial comment groups
+    (e.g., AdComment's adaptive resampling) upweights vulnerable regions during
+    training. For our fixed strategy scope, we apply a lightweight analogue:
+    larger clean-vs-aug disagreement yields slightly higher consistency weight.
+
+    We use detached JS divergence as a bounded hardness signal and clamp by
+    ``max_scale`` to keep optimization stable.
+    """
+    if not enabled:
+        return clean_logits.new_tensor(1.0)
+
+    js = consistency_js(clean_logits, aug_logits).detach()
+    scale = 1.0 + js
+    if max_scale > 1.0:
+        scale = torch.clamp(scale, max=max_scale)
+    return scale
+
+
 def total_loss(strategy: StrategyConfig, clean_logits, labels, aug_logits=None, manifold_loss=None):
     """Compute training loss for the allowed strategy scope.
 
@@ -116,12 +148,24 @@ def total_loss(strategy: StrategyConfig, clean_logits, labels, aug_logits=None, 
         # Paper-grounded tweak (AdSent): keep veracity stable under sentiment flips
         # using a symmetric divergence instead of one-way KL.
         conf_scale = _consistency_confidence_scale(clean_logits, strategy.confidence_threshold)
-        base = ce + strategy.consistency_weight * conf_scale * consistency_js(clean_logits, aug_logits)
+        focus_scale = _adaptive_consistency_focus_scale(
+            clean_logits,
+            aug_logits,
+            enabled=strategy.adaptive_consistency_focus,
+            max_scale=strategy.adaptive_focus_max_scale,
+        )
+        base = ce + strategy.consistency_weight * conf_scale * focus_scale * consistency_js(clean_logits, aug_logits)
     else:
         # Style/sentiment branch uses optional confidence gating to avoid forcing
         # invariance on uncertain clean predictions.
         conf_scale = _consistency_confidence_scale(clean_logits, strategy.confidence_threshold)
-        base = ce + strategy.consistency_weight * conf_scale * consistency_kl(clean_logits, aug_logits)
+        focus_scale = _adaptive_consistency_focus_scale(
+            clean_logits,
+            aug_logits,
+            enabled=strategy.adaptive_consistency_focus,
+            max_scale=strategy.adaptive_focus_max_scale,
+        )
+        base = ce + strategy.consistency_weight * conf_scale * focus_scale * consistency_kl(clean_logits, aug_logits)
 
     # Simple manifold regularization term from mHC-lite structure (if available)
     if manifold_loss is not None:
