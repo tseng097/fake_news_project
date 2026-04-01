@@ -119,6 +119,12 @@ class StyleReframeSimpleTests(unittest.TestCase):
         self.assertFalse(out.lower().startswith("fact check"))
         self.assertIn("this post is going viral", out.lower())
 
+    def test_style_reframe_removes_leading_source_byline_prefix(self):
+        text = "Reuters - BREAKING UPDATE: Officials deny the claim"
+        out = style_reframe_simple(text)
+        self.assertFalse(out.lower().startswith("reuters -"))
+        self.assertIn("breaking update: officials deny the claim", out.lower())
+
 
 class LexicalMhcLiteSafetyTests(unittest.TestCase):
     @patch("src.augment.wn")

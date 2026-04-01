@@ -408,10 +408,11 @@ def style_reframe_simple(text: str) -> str:
     robustness studies (e.g., MDFEND/FakeZero-like cross-platform settings)
     suggest source/platform artifacts can become shortcut features.
 
-    2026-03 enhancement (paper-driven): strip leading section-label wrappers
-    such as "BREAKING:", "OPINION:", "ANALYSIS:" and "FACT CHECK:". Recent
-    stylometric disinformation work highlights these as high-signal style cues
-    that can become detector shortcuts across outlets/domains.
+    2026-03/04 enhancement (paper-driven): strip leading section-label wrappers
+    such as "BREAKING:", "OPINION:", "ANALYSIS:" and "FACT CHECK:", and remove
+    source/byline prefixes like "Reuters -" / "AP |" / "BBC News:". Stylometric
+    disinformation studies highlight these as high-signal style cues that can
+    become detector shortcuts across outlets/domains.
     """
     out = text.translate(STYLE_CHAR_NORMALIZATION)
 
@@ -430,6 +431,16 @@ def style_reframe_simple(text: str) -> str:
         "",
         out,
         flags=re.IGNORECASE,
+    )
+
+    # Paper-grounded style cue strip: some robustness papers (Style-News,
+    # adversarial style augmentation) show source/byline wrappers can become
+    # shortcut features. Remove leading source tags while preserving the claim
+    # text, e.g., "Reuters -", "AP |", "BBC News:".
+    out = re.sub(
+        r"^\s*(?:[A-Za-z]{2,10}(?:\s+[A-Za-z]{2,10}){0,2})\s*(?:\||-|:)\s+",
+        "",
+        out,
     )
 
     # Strip markdown emphasis wrappers (e.g., **shocking**, _urgent_, ~~fake~~)
