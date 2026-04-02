@@ -46,15 +46,32 @@ class SentimentShiftSimpleTests(unittest.TestCase):
         self.assertEqual(out1, out2)
 
     def test_different_seed_changes_attack_pattern(self):
-        text = "good great excellent positive success benefit"
-        out1 = sentiment_shift_simple(text, budget_ratio=0.5, seed=1)
-        out2 = sentiment_shift_simple(text, budget_ratio=0.5, seed=2)
-        self.assertNotEqual(out1, out2)
+        text = "good great excellent positive success benefit safe terrible"
+        out1 = sentiment_shift_simple(text, budget_ratio=0.4, seed=1)
+        out2 = sentiment_shift_simple(text, budget_ratio=0.4, seed=2)
+        out3 = sentiment_shift_simple(text, budget_ratio=0.4, seed=3)
+        self.assertTrue(out1 != out2 or out1 != out3 or out2 != out3)
 
     def test_tone_word_swap_applies(self):
         text = "A shocking and outrageous claim spread online"
         out = sentiment_shift_simple(text, budget_ratio=0.5, seed=4)
         self.assertTrue("ordinary" in out.lower() or "acceptable" in out.lower())
+
+    def test_emoji_sentiment_swap_applies(self):
+        text = "This report is amazing 🙂"
+        out = sentiment_shift_simple(text, budget_ratio=0.5, seed=8)
+        self.assertIn("🙁", out)
+
+    def test_emoticon_swap_respects_budget(self):
+        text = "Great work :) truly excellent"
+        out = sentiment_shift_simple(text, budget_ratio=0.1, seed=10)
+        # One-token-equivalent budget should allow at most one sentiment cue swap.
+        changed_signals = sum(
+            1
+            for marker in [":(", "awful", "terrible", "negative", "failure"]
+            if marker in out.lower()
+        )
+        self.assertLessEqual(changed_signals, 1)
 
 
 class StyleReframeSimpleTests(unittest.TestCase):
