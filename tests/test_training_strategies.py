@@ -96,6 +96,26 @@ class TrainingStrategyLossTests(unittest.TestCase):
         focus_loss = total_loss(focus_cfg, self.clean_logits, self.labels, aug_logits=self.aug_logits)
         self.assertGreater(focus_loss.item(), base_loss.item())
 
+    def test_consistency_temperature_softens_penalty_without_changing_ce(self):
+        cool_cfg = StrategyConfig(
+            name="lexical_mhc_lite",
+            consistency_weight=0.7,
+            consistency_temperature=1.0,
+        )
+        warm_cfg = StrategyConfig(
+            name="lexical_mhc_lite",
+            consistency_weight=0.7,
+            consistency_temperature=2.0,
+        )
+
+        cool_loss = total_loss(cool_cfg, self.clean_logits, self.labels, aug_logits=self.aug_logits)
+        warm_loss = total_loss(warm_cfg, self.clean_logits, self.labels, aug_logits=self.aug_logits)
+        ce = torch.nn.functional.cross_entropy(self.clean_logits, self.labels)
+
+        self.assertGreater(cool_loss.item(), ce.item())
+        self.assertGreater(warm_loss.item(), ce.item())
+        self.assertLess(warm_loss.item(), cool_loss.item())
+
 
 if __name__ == "__main__":
     unittest.main()

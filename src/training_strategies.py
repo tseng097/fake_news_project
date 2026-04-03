@@ -20,6 +20,10 @@ class StrategyConfig:
     adaptive_consistency_focus: bool = True
     # Upper bound on adaptive scaling to avoid destabilizing optimization.
     adaptive_focus_max_scale: float = 1.5
+    # Optional temperature for consistency-only comparisons.
+    # temp>1 softens over-confident distributions under style/sentiment shift,
+    # while keeping the supervised CE branch unchanged.
+    consistency_temperature: float = 1.0
 
 
 def classification_loss(logits, labels):
@@ -44,6 +48,21 @@ def consistency_kl_symmetric(clean_logits, aug_logits):
         consistency_kl(clean_logits, aug_logits)
         + consistency_kl(aug_logits, clean_logits)
     )
+
+
+def _consistency_temperature_scale(logits, temperature: float):
+    """Scale logits for consistency losses only.
+
+    mHC-lite/style/sentiment consistency can become too peaky when the model is
+    very confident on one view (especially under lexical paraphrases). Applying
+    a temperature >1.0 softens both views before divergence computation, which
+    reduces brittle over-penalization while preserving the CE supervision path.
+    """
+    if temperature is None or temperature <= 0:
+        return logits
+    if temperature == 1.0:
+        return logits
+    return logits / temperature
 
 
 def consistency_js(clean_logits, aug_logits):
@@ -139,33 +158,43 @@ def total_loss(strategy: StrategyConfig, clean_logits, labels, aug_logits=None, 
     """
     ce = classification_loss(clean_logits, labels)
 
+    # Keep supervision unchanged; only soften logits for consistency comparisons.
+    clean_cons = _consistency_temperature_scale(
+        clean_logits, strategy.consistency_temperature
+    )
+    aug_cons = _consistency_temperature_scale(
+        aug_logits, strategy.consistency_temperature
+    ) if aug_logits is not None else None
+
     if strategy.name == "vanilla" or aug_logits is None:
         base = ce
     elif strategy.name == "lexical_mhc_lite":
         # mHC-lite main line: symmetric lexical consistency under synonym perturbations.
-        base = ce + strategy.consistency_weight * consistency_kl_symmetric(clean_logits, aug_logits)
+        # NOTE: we apply optional consistency_temperature here too, so lexical
+        # disagreement pressure can be softened without changing label CE.
+        base = ce + strategy.consistency_weight * consistency_kl_symmetric(clean_cons, aug_cons)
     elif strategy.name == "sentiment_invariance" and strategy.sentiment_use_js:
         # Paper-grounded tweak (AdSent): keep veracity stable under sentiment flips
         # using a symmetric divergence instead of one-way KL.
         conf_scale = _consistency_confidence_scale(clean_logits, strategy.confidence_threshold)
         focus_scale = _adaptive_consistency_focus_scale(
-            clean_logits,
-            aug_logits,
+            clean_cons,
+            aug_cons,
             enabled=strategy.adaptive_consistency_focus,
             max_scale=strategy.adaptive_focus_max_scale,
         )
-        base = ce + strategy.consistency_weight * conf_scale * focus_scale * consistency_js(clean_logits, aug_logits)
+        base = ce + strategy.consistency_weight * conf_scale * focus_scale * consistency_js(clean_cons, aug_cons)
     else:
         # Style/sentiment branch uses optional confidence gating to avoid forcing
         # invariance on uncertain clean predictions.
         conf_scale = _consistency_confidence_scale(clean_logits, strategy.confidence_threshold)
         focus_scale = _adaptive_consistency_focus_scale(
-            clean_logits,
-            aug_logits,
+            clean_cons,
+            aug_cons,
             enabled=strategy.adaptive_consistency_focus,
             max_scale=strategy.adaptive_focus_max_scale,
         )
-        base = ce + strategy.consistency_weight * conf_scale * focus_scale * consistency_kl(clean_logits, aug_logits)
+        base = ce + strategy.consistency_weight * conf_scale * focus_scale * consistency_kl(clean_cons, aug_cons)
 
     # Simple manifold regularization term from mHC-lite structure (if available)
     if manifold_loss is not None:
