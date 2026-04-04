@@ -274,6 +274,35 @@ class LexicalMhcLiteSafetyTests(unittest.TestCase):
         self.assertIn("solid", out.lower())
         self.assertNotIn("banana", out.lower())
 
+    @patch("src.augment.wn")
+    def test_lexical_perturb_protects_temporal_causal_pivots(self, mock_wn):
+        def _synsets(tok):
+            if tok.lower() == "because":
+                return [_DummySynset(["since"])]
+            if tok.lower() == "report":
+                return [_DummySynset(["account"])]
+            return []
+
+        mock_wn.synsets.side_effect = _synsets
+        text = "The claim spread because the report was repeated"
+        out = lexical_synonym_perturb(text, budget_ratio=1.0, seed=37, protected_words=set())
+        self.assertIn("because", out.lower())
+
+    @patch("src.augment.wn")
+    def test_lexical_perturb_can_edit_non_pivot_with_temporal_causal_guard_enabled(self, mock_wn):
+        def _synsets(tok):
+            if tok.lower() == "because":
+                return [_DummySynset(["since"])]
+            if tok.lower() == "reliable":
+                return [_DummySynset(["trustworthy"])]
+            return []
+
+        mock_wn.synsets.side_effect = _synsets
+        text = "A reliable source explained events because evidence emerged"
+        out = lexical_synonym_perturb(text, budget_ratio=1.0, seed=43, protected_words=set())
+        self.assertIn("because", out.lower())
+        self.assertIn("trustworthy", out.lower())
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -159,6 +159,24 @@ QUANTIFIER_COMPARATIVE_PIVOTS = {
     "minority",
 }
 
+# mHC-lite claim-logic pivots: temporal/causal operators frequently determine
+# whether a claim is support/contrast/cause framed (e.g., "after" vs "before",
+# "because" vs "despite"). Black-box fake-news attack studies show small edits
+# on such function words can induce large prediction swings, so we keep them
+# protected to preserve proposition structure during lexical perturbation.
+TEMPORAL_CAUSAL_PIVOTS = {
+    "before",
+    "after",
+    "during",
+    "while",
+    "when",
+    "because",
+    "since",
+    "therefore",
+    "thus",
+    "hence",
+}
+
 
 def _tokenize_simple(text: str) -> List[str]:
     return re.findall(r"\w+|[^\w\s]", text, flags=re.UNICODE)
@@ -328,7 +346,9 @@ def lexical_synonym_perturb(
     2) avoid swapping modifier/negation pivots (e.g., "only", "never") because
        adversarial benchmarks show detectors are brittle to compositional cues;
     3) avoid swapping quantifier/comparative pivots (e.g., "many", "more",
-       "less", "majority") because these often encode claim logic/scope.
+       "less", "majority") because these often encode claim logic/scope;
+    4) avoid swapping temporal/causal operators (e.g., "before", "because"),
+       which can invert event logic under black-box lexical attacks.
 
     This keeps lexical_mhc_lite focused on lexical paraphrase invariance, while
     sentiment-specific perturbations remain isolated to sentiment_invariance.
@@ -351,6 +371,7 @@ def lexical_synonym_perturb(
         | MODIFIER_PIVOTS
         | DISCOURSE_PIVOTS
         | QUANTIFIER_COMPARATIVE_PIVOTS
+        | TEMPORAL_CAUSAL_PIVOTS
     )
     protected = set(protected_words) | base_protected if protected_words is not None else base_protected
 
