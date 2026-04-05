@@ -303,6 +303,49 @@ class LexicalMhcLiteSafetyTests(unittest.TestCase):
         self.assertIn("because", out.lower())
         self.assertIn("trustworthy", out.lower())
 
+    @patch("src.augment.wn")
+    def test_lexical_perturb_respects_configurable_similarity_floor(self, mock_wn):
+        def _synsets(tok):
+            low = tok.lower()
+            if low == "reliable":
+                return [_DummySynset(["solid"], tag="reliable", sim_map={"solid": 0.5})]
+            if low == "solid":
+                return [_DummySynset([], tag="solid")]
+            return []
+
+        mock_wn.synsets.side_effect = _synsets
+        text = "A reliable report described the event"
+        out = lexical_synonym_perturb(
+            text,
+            budget_ratio=1.0,
+            seed=47,
+            protected_words=set(),
+            min_semantic_similarity=0.6,
+        )
+        # With a stricter floor (0.6), candidate similarity 0.5 is rejected.
+        self.assertEqual(out, text)
+
+    @patch("src.augment.wn")
+    def test_lexical_perturb_allows_lower_similarity_floor_for_ablation(self, mock_wn):
+        def _synsets(tok):
+            low = tok.lower()
+            if low == "reliable":
+                return [_DummySynset(["solid"], tag="reliable", sim_map={"solid": 0.5})]
+            if low == "solid":
+                return [_DummySynset([], tag="solid")]
+            return []
+
+        mock_wn.synsets.side_effect = _synsets
+        text = "A reliable report described the event"
+        out = lexical_synonym_perturb(
+            text,
+            budget_ratio=1.0,
+            seed=53,
+            protected_words=set(),
+            min_semantic_similarity=0.1,
+        )
+        self.assertIn("solid", out.lower())
+
 
 if __name__ == "__main__":
     unittest.main()

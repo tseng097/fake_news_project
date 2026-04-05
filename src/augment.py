@@ -337,6 +337,7 @@ def lexical_synonym_perturb(
     budget_ratio: float = 0.08,
     seed: int | None = None,
     protected_words: set[str] | None = None,
+    min_semantic_similarity: float = 0.2,
 ) -> str:
     """Lexical perturbation by WordNet synonyms for mHC-lite training.
 
@@ -353,6 +354,11 @@ def lexical_synonym_perturb(
     This keeps lexical_mhc_lite focused on lexical paraphrase invariance, while
     sentiment-specific perturbations remain isolated to sentiment_invariance.
 
+    `min_semantic_similarity` controls the WordNet path-similarity floor for
+    accepted substitutions. Keeping this explicit makes mHC-lite easier to tune
+    when lexical attacks are expected to be stronger (higher threshold) or more
+    diverse (lower threshold), without changing the strategy set.
+
     If NLTK wordnet is unavailable, falls back to no-op.
     """
     if wn is None:
@@ -360,6 +366,10 @@ def lexical_synonym_perturb(
 
     rng = random.Random(seed)
     tokens = _tokenize_simple(text)
+
+    # mHC-lite lexical strictness knob: clamp to a sane range so callers can
+    # tighten/relax semantic conservativeness without destabilizing behavior.
+    sim_floor = min(max(min_semantic_similarity, 0.0), 1.0)
 
     # mHC-lite safety rail: do not replace explicitly protected words
     # (e.g., sentiment/modifier/discourse pivots), reducing augmentation-induced
@@ -407,7 +417,9 @@ def lexical_synonym_perturb(
             and _morph_compatible(tok, w)
             # mHC-lite lexical guard: keep only semantically close candidates
             # so consistency regularization is driven by paraphrastic changes.
-            and _max_wordnet_path_similarity(tok, w) >= 0.2
+            # The threshold is configurable via `min_semantic_similarity` to
+            # support stricter lexical robustness ablations.
+            and _max_wordnet_path_similarity(tok, w) >= sim_floor
         ]
         if not lemmas:
             continue
