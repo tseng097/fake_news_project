@@ -279,14 +279,32 @@ class LexicalMhcLiteSafetyTests(unittest.TestCase):
         def _synsets(tok):
             if tok.lower() == "because":
                 return [_DummySynset(["since"])]
-            if tok.lower() == "report":
-                return [_DummySynset(["account"])]
+            if tok.lower() == "reliable":
+                return [_DummySynset(["trustworthy"])]
             return []
 
         mock_wn.synsets.side_effect = _synsets
-        text = "The claim spread because the report was repeated"
+        text = "A reliable source spread the claim because evidence emerged"
         out = lexical_synonym_perturb(text, budget_ratio=1.0, seed=37, protected_words=set())
         self.assertIn("because", out.lower())
+        self.assertIn("trustworthy", out.lower())
+
+    @patch("src.augment.wn")
+    def test_lexical_perturb_protects_stance_verb_pivots(self, mock_wn):
+        def _synsets(tok):
+            if tok.lower() == "confirmed":
+                return [_DummySynset(["verified"])]
+            if tok.lower() == "reliable":
+                return [_DummySynset(["trustworthy"])]
+            return []
+
+        mock_wn.synsets.side_effect = _synsets
+        text = "A reliable outlet confirmed the claim yesterday"
+        out = lexical_synonym_perturb(text, budget_ratio=1.0, seed=59, protected_words=set())
+        # mHC-lite should preserve stance verb anchors.
+        self.assertIn("confirmed", out.lower())
+        # Non-pivot lexical words may still be perturbed.
+        self.assertIn("trustworthy", out.lower())
 
     @patch("src.augment.wn")
     def test_lexical_perturb_can_edit_non_pivot_with_temporal_causal_guard_enabled(self, mock_wn):
