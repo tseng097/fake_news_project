@@ -322,6 +322,23 @@ class LexicalMhcLiteSafetyTests(unittest.TestCase):
         self.assertIn("trustworthy", out.lower())
 
     @patch("src.augment.wn")
+    def test_lexical_perturb_protects_epistemic_hedge_pivots(self, mock_wn):
+        def _synsets(tok):
+            if tok.lower() == "reportedly":
+                return [_DummySynset(["allegedly"])]
+            if tok.lower() == "reliable":
+                return [_DummySynset(["trustworthy"])]
+            return []
+
+        mock_wn.synsets.side_effect = _synsets
+        text = "A reliable source reportedly confirmed the claim"
+        out = lexical_synonym_perturb(text, budget_ratio=1.0, seed=61, protected_words=set())
+        # Hedge markers should stay fixed under mHC-lite lexical perturbation.
+        self.assertIn("reportedly", out.lower())
+        # Non-pivot lexical tokens can still be edited.
+        self.assertIn("trustworthy", out.lower())
+
+    @patch("src.augment.wn")
     def test_lexical_perturb_respects_configurable_similarity_floor(self, mock_wn):
         def _synsets(tok):
             low = tok.lower()

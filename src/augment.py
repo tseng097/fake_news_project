@@ -140,6 +140,24 @@ DISCOURSE_PIVOTS = {
     "whereas",
 }
 
+# mHC-lite epistemic hedge pivots: semantically-equivalent adversarial rule work
+# (SEAR-style transformations) highlights that certainty/uncertainty markers are
+# highly behavior-shaping despite tiny lexical edits. In fake-news text these
+# hedges can flip perceived evidence strength ("confirmed" vs "reportedly"), so
+# we keep them fixed during lexical synonym perturbation.
+HEDGE_PIVOTS = {
+    "allegedly",
+    "reportedly",
+    "apparently",
+    "supposedly",
+    "purportedly",
+    "seemingly",
+    "likely",
+    "unlikely",
+    "possibly",
+    "probably",
+}
+
 # mHC-lite semantic pivots: quantifiers/comparatives often encode the factual
 # scope or direction of a claim (e.g., "many" vs "few", "more" vs "less").
 # Adversarial benchmark work on fake-news detection highlights classifier
@@ -378,7 +396,9 @@ def lexical_synonym_perturb(
        which can invert event logic under black-box lexical attacks;
     5) avoid swapping claim stance/reporting verbs (e.g., "confirmed",
        "alleged", "denied") because adversarial lexical saliency attacks often
-       target these and can alter veracity stance rather than wording.
+       target these and can alter veracity stance rather than wording;
+    6) avoid swapping epistemic hedges (e.g., "reportedly", "possibly") since
+       tiny certainty-marker edits can change perceived evidence strength.
 
     This keeps lexical_mhc_lite focused on lexical paraphrase invariance, while
     sentiment-specific perturbations remain isolated to sentiment_invariance.
@@ -414,6 +434,9 @@ def lexical_synonym_perturb(
         # mHC-lite safety: preserve stance/reporting pivots so lexical
         # augmentations avoid mutating claim attribution logic.
         | STANCE_VERB_PIVOTS
+        # mHC-lite safety: preserve certainty/uncertainty hedges to avoid
+        # synthetic edits that alter evidential strength framing.
+        | HEDGE_PIVOTS
     )
     protected = set(protected_words) | base_protected if protected_words is not None else base_protected
 
