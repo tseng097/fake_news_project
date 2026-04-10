@@ -116,6 +116,28 @@ class TrainingStrategyLossTests(unittest.TestCase):
         self.assertGreater(warm_loss.item(), ce.item())
         self.assertLess(warm_loss.item(), cool_loss.item())
 
+    def test_lexical_confidence_gate_can_disable_mhc_consistency(self):
+        cfg = StrategyConfig(
+            name="lexical_mhc_lite",
+            consistency_weight=0.7,
+            confidence_threshold=0.999,  # above fixture confidence
+            lexical_confidence_gate=True,
+        )
+        base_ce = torch.nn.functional.cross_entropy(self.clean_logits, self.labels)
+        got = total_loss(cfg, self.clean_logits, self.labels, aug_logits=self.aug_logits)
+        self.assertTrue(torch.isclose(got, base_ce, atol=1e-7))
+
+    def test_lexical_confidence_gate_can_be_turned_off(self):
+        cfg = StrategyConfig(
+            name="lexical_mhc_lite",
+            consistency_weight=0.7,
+            confidence_threshold=0.999,  # above fixture confidence
+            lexical_confidence_gate=False,
+        )
+        got = total_loss(cfg, self.clean_logits, self.labels, aug_logits=self.aug_logits)
+        base_ce = torch.nn.functional.cross_entropy(self.clean_logits, self.labels)
+        self.assertGreater(got.item(), base_ce.item())
+
 
 if __name__ == "__main__":
     unittest.main()

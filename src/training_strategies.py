@@ -10,10 +10,14 @@ class StrategyConfig:
     consistency_weight: float = 0.5
     manifold_weight: float = 0.05
     sentiment_use_js: bool = True
-    # Confidence gate for style/sentiment consistency.
+    # Confidence gate for augmentation consistency.
     # Only clean predictions with max-prob >= threshold contribute to
-    # augmentation consistency, reducing noisy invariance pressure.
+    # consistency regularization, reducing noisy invariance pressure.
     confidence_threshold: float = 0.0
+    # mHC-lite option: apply the same confidence gate to lexical consistency.
+    # This is useful when synonym perturbations are occasionally low-quality and
+    # could otherwise over-regularize uncertain samples.
+    lexical_confidence_gate: bool = True
     # Optional hard-example emphasis for style/sentiment invariance.
     # Inspired by adversarial group-reweighting ideas (e.g., AdComment/IDR):
     # increase consistency pressure when clean/aug predictions diverge more.
@@ -172,7 +176,16 @@ def total_loss(strategy: StrategyConfig, clean_logits, labels, aug_logits=None, 
         # mHC-lite main line: symmetric lexical consistency under synonym perturbations.
         # NOTE: we apply optional consistency_temperature here too, so lexical
         # disagreement pressure can be softened without changing label CE.
-        base = ce + strategy.consistency_weight * consistency_kl_symmetric(clean_cons, aug_cons)
+        #
+        # Paper-grounded robustness/generalization tweak: lexical substitutions
+        # can be noisy on ambiguous samples, so optionally gate mHC consistency
+        # by clean-view confidence to avoid over-penalizing uncertain examples.
+        conf_scale = (
+            _consistency_confidence_scale(clean_logits, strategy.confidence_threshold)
+            if strategy.lexical_confidence_gate
+            else clean_logits.new_tensor(1.0)
+        )
+        base = ce + strategy.consistency_weight * conf_scale * consistency_kl_symmetric(clean_cons, aug_cons)
     elif strategy.name == "sentiment_invariance" and strategy.sentiment_use_js:
         # Paper-grounded tweak (AdSent): keep veracity stable under sentiment flips
         # using a symmetric divergence instead of one-way KL.
