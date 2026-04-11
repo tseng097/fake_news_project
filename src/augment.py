@@ -59,6 +59,11 @@ SENTIMENT_SWAP = {
 # Additional tone-bearing sentiment words often used in sensational headlines.
 # This extends sentiment attacks beyond simple polarity lexemes (AdSent-style
 # multi-granular sentiment perturbation) while staying within project scope.
+#
+# 2026-04 enhancement (ANN/real-user robustness motivation): include a compact
+# set of social-media slang sentiment pivots (e.g., "lit", "cringe", "sus").
+# Real-user comments frequently carry these cues; including them improves
+# sentiment_invariance stress coverage without changing strategy scope.
 SENTIMENT_TONE_SWAP = {
     "shocking": "ordinary",
     "outrageous": "acceptable",
@@ -69,6 +74,11 @@ SENTIMENT_TONE_SWAP = {
     "acceptable": "outrageous",
     "unremarkable": "amazing",
     "reassuring": "terrifying",
+    "lit": "awful",
+    "cringe": "excellent",
+    "sus": "credible",
+    "awful": "lit",
+    "credible": "sus",
 }
 
 # Controlled, phrase-level swaps inspired by adversarial sentiment attacks.

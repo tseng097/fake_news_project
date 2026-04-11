@@ -57,6 +57,11 @@ class SentimentShiftSimpleTests(unittest.TestCase):
         out = sentiment_shift_simple(text, budget_ratio=0.5, seed=4)
         self.assertTrue("ordinary" in out.lower() or "acceptable" in out.lower())
 
+    def test_social_slang_tone_swap_applies(self):
+        text = "This post is lit and kinda sus"
+        out = sentiment_shift_simple(text, budget_ratio=0.6, seed=12)
+        self.assertTrue(("awful" in out.lower()) or ("credible" in out.lower()))
+
     def test_emoji_sentiment_swap_applies(self):
         text = "This report is amazing 🙂"
         out = sentiment_shift_simple(text, budget_ratio=0.5, seed=8)
