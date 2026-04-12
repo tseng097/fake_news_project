@@ -385,6 +385,25 @@ def _max_wordnet_path_similarity(source: str, replacement: str) -> float:
                 best = sim
     return best
 
+def _is_high_polysemy_word(word: str, max_source_polysemy: int) -> bool:
+    """Conservative ambiguity guard for mHC-lite lexical substitutions.
+
+    Context-aware attacks (e.g., BERT-Attack/BAE/CLARE) show that token meaning
+    is heavily context-dependent; context-free synonym replacement is most risky
+    on highly polysemous words. Because this repo intentionally stays lightweight
+    (WordNet only), we skip replacements for source words with many synsets.
+
+    This keeps lexical_mhc_lite closer to paraphrastic perturbations and reduces
+    accidental meaning drift from ambiguous anchors like "charge" or "right".
+    """
+    if wn is None or max_source_polysemy <= 0:
+        return False
+    try:
+        return len(wn.synsets(word)) > max_source_polysemy
+    except Exception:
+        # If WordNet lookup fails/mocked unexpectedly, preserve backward behavior.
+        return False
+
 
 def lexical_synonym_perturb(
     text: str,
@@ -392,6 +411,7 @@ def lexical_synonym_perturb(
     seed: int | None = None,
     protected_words: set[str] | None = None,
     min_semantic_similarity: float = 0.2,
+    max_source_polysemy: int = 12,
 ) -> str:
     """Lexical perturbation by WordNet synonyms for mHC-lite training.
 
@@ -417,6 +437,10 @@ def lexical_synonym_perturb(
     accepted substitutions. Keeping this explicit makes mHC-lite easier to tune
     when lexical attacks are expected to be stronger (higher threshold) or more
     diverse (lower threshold), without changing the strategy set.
+
+    `max_source_polysemy` limits substitutions on highly ambiguous source words
+    under context-free WordNet lookup. Lower values are stricter and usually
+    safer for veracity-preserving paraphrase augmentation.
 
     If NLTK wordnet is unavailable, falls back to no-op.
     """
@@ -458,6 +482,9 @@ def lexical_synonym_perturb(
         and t.lower() not in protected
         and not _looks_like_named_entity(tokens, i)
         and not _near_numeric_context(tokens, i)
+        # mHC-lite ambiguity guard: avoid replacing highly polysemous source
+        # words when using context-free WordNet synonyms.
+        and not _is_high_polysemy_word(t, max_source_polysemy)
     ]
     if not word_positions:
         return text

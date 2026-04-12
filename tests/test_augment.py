@@ -387,5 +387,62 @@ class LexicalMhcLiteSafetyTests(unittest.TestCase):
         self.assertIn("solid", out.lower())
 
 
+    @patch("src.augment.wn")
+    def test_lexical_perturb_skips_high_polysemy_source_word(self, mock_wn):
+        def _synsets(tok):
+            low = tok.lower()
+            if low == "right":
+                # Simulate highly polysemous source anchor.
+                return [
+                    _DummySynset(["correct"]),
+                    _DummySynset(["entitlement"]),
+                    _DummySynset(["direction"]),
+                    _DummySynset(["privilege"]),
+                    _DummySynset(["justice"]),
+                    _DummySynset(["claim"]),
+                ]
+            return []
+
+        mock_wn.synsets.side_effect = _synsets
+        text = "The right source described the event"
+        out = lexical_synonym_perturb(
+            text,
+            budget_ratio=1.0,
+            seed=71,
+            protected_words=set(),
+            max_source_polysemy=3,
+        )
+        self.assertEqual(out, text)
+
+    @patch("src.augment.wn")
+    def test_lexical_perturb_allows_word_when_polysemy_threshold_relaxed(self, mock_wn):
+        def _synsets(tok):
+            low = tok.lower()
+            if low == "right":
+                return [
+                    _DummySynset(["correct"]),
+                    _DummySynset(["entitlement"]),
+                    _DummySynset(["direction"]),
+                    _DummySynset(["privilege"]),
+                    _DummySynset(["justice"]),
+                    _DummySynset(["claim"]),
+                ]
+            if low == "correct":
+                return [_DummySynset([], tag="correct")]
+            return []
+
+        mock_wn.synsets.side_effect = _synsets
+        text = "The right source described the event"
+        out = lexical_synonym_perturb(
+            text,
+            budget_ratio=1.0,
+            seed=73,
+            protected_words=set(),
+            max_source_polysemy=20,
+        )
+        self.assertNotEqual(out, text)
+        self.assertNotIn(" right ", f" {out.lower()} ")
+
+
 if __name__ == "__main__":
     unittest.main()
