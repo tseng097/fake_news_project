@@ -13,10 +13,11 @@ class _DummyLemma:
 
 
 class _DummySynset:
-    def __init__(self, names, tag=None, sim_map=None):
+    def __init__(self, names, tag=None, sim_map=None, pos_tag=None):
         self._names = names
         self._tag = tag
         self._sim_map = sim_map or {}
+        self._pos_tag = pos_tag
 
     def lemmas(self):
         return [_DummyLemma(n) for n in self._names]
@@ -24,6 +25,9 @@ class _DummySynset:
     def path_similarity(self, other):
         other_tag = getattr(other, "_tag", None)
         return self._sim_map.get(other_tag, 0.0)
+
+    def pos(self):
+        return self._pos_tag
 
 
 class SentimentShiftSimpleTests(unittest.TestCase):
@@ -442,6 +446,36 @@ class LexicalMhcLiteSafetyTests(unittest.TestCase):
         )
         self.assertNotEqual(out, text)
         self.assertNotIn(" right ", f" {out.lower()} ")
+
+    @patch("src.augment.wn")
+    def test_lexical_perturb_rejects_pos_mismatch_candidate(self, mock_wn):
+        def _synsets(tok):
+            low = tok.lower()
+            if low == "record":
+                return [_DummySynset(["charge"], tag="record", sim_map={"charge": 0.8}, pos_tag="n")]
+            if low == "charge":
+                return [_DummySynset([], tag="charge", pos_tag="v")]
+            return []
+
+        mock_wn.synsets.side_effect = _synsets
+        text = "They record evidence"
+        out = lexical_synonym_perturb(text, budget_ratio=1.0, seed=81, protected_words=set())
+        self.assertEqual(out, text)
+
+    @patch("src.augment.wn")
+    def test_lexical_perturb_allows_pos_matched_candidate(self, mock_wn):
+        def _synsets(tok):
+            low = tok.lower()
+            if low == "record":
+                return [_DummySynset(["archive"], tag="record", sim_map={"archive": 0.8}, pos_tag="v")]
+            if low == "archive":
+                return [_DummySynset([], tag="archive", pos_tag="v")]
+            return []
+
+        mock_wn.synsets.side_effect = _synsets
+        text = "They record evidence"
+        out = lexical_synonym_perturb(text, budget_ratio=1.0, seed=83, protected_words=set())
+        self.assertIn("archive", out.lower())
 
 
 if __name__ == "__main__":

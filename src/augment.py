@@ -405,6 +405,32 @@ def _is_high_polysemy_word(word: str, max_source_polysemy: int) -> bool:
         return False
 
 
+def _has_wordnet_pos(word: str, pos_tag: str | None) -> bool:
+    """Return True when ``word`` has at least one synset with ``pos_tag``.
+
+    mHC-lite lexical perturbation is context-free (WordNet lookup only), so
+    POS-mismatched swaps (noun→verb etc.) are a frequent source of grammar and
+    meaning drift. We apply a conservative same-POS filter when POS metadata is
+    available from WordNet/mocks. If unavailable, we keep backward behavior.
+    """
+    if wn is None or not pos_tag:
+        return True
+
+    try:
+        synsets = wn.synsets(word)
+    except Exception:
+        return True
+
+    if not synsets:
+        return True
+
+    for syn in synsets:
+        pos_fn = getattr(syn, "pos", None)
+        if callable(pos_fn) and pos_fn() == pos_tag:
+            return True
+    return False
+
+
 def lexical_synonym_perturb(
     text: str,
     budget_ratio: float = 0.08,
@@ -428,7 +454,9 @@ def lexical_synonym_perturb(
        "alleged", "denied") because adversarial lexical saliency attacks often
        target these and can alter veracity stance rather than wording;
     6) avoid swapping epistemic hedges (e.g., "reportedly", "possibly") since
-       tiny certainty-marker edits can change perceived evidence strength.
+       tiny certainty-marker edits can change perceived evidence strength;
+    7) prefer POS-consistent substitutions (when WordNet POS metadata exists)
+       to reduce noun/verb drift from context-free synonym lookup.
 
     This keeps lexical_mhc_lite focused on lexical paraphrase invariance, while
     sentiment-specific perturbations remain isolated to sentiment_invariance.
@@ -497,16 +525,24 @@ def lexical_synonym_perturb(
     for pos in cand_pos:
         tok = tokens[pos]
         synsets = wn.synsets(tok)
-        lemmas = []
+
+        # mHC-lite POS guard: retain source synset POS tags when available so
+        # lexical substitutions stay in similar grammatical roles.
+        lemma_with_pos = []
         for s in synsets:
-            lemmas.extend([l.name().replace("_", " ") for l in s.lemmas()])
+            pos_fn = getattr(s, "pos", None)
+            syn_pos = pos_fn() if callable(pos_fn) else None
+            for l in s.lemmas():
+                lemma_with_pos.append((l.name().replace("_", " "), syn_pos))
+
         lemmas = [
             w
-            for w in lemmas
+            for w, src_pos in lemma_with_pos
             if w.lower() != tok.lower()
             and w.isalpha()
             and w.lower() not in protected
             and _morph_compatible(tok, w)
+            and _has_wordnet_pos(w, src_pos)
             # mHC-lite lexical guard: keep only semantically close candidates
             # so consistency regularization is driven by paraphrastic changes.
             # The threshold is configurable via `min_semantic_similarity` to
