@@ -67,6 +67,30 @@ class TrainingStrategyLossTests(unittest.TestCase):
         got = total_loss(cfg, self.clean_logits, self.labels, aug_logits=self.aug_logits)
         self.assertTrue(torch.isclose(got, expected, atol=1e-7))
 
+    def test_style_invariance_defaults_to_js(self):
+        cfg = StrategyConfig(
+            name="style_invariance",
+            consistency_weight=0.5,
+            style_use_js=True,
+            adaptive_consistency_focus=False,
+        )
+        base_ce = torch.nn.functional.cross_entropy(self.clean_logits, self.labels)
+        expected = base_ce + 0.5 * consistency_js(self.clean_logits, self.aug_logits)
+        got = total_loss(cfg, self.clean_logits, self.labels, aug_logits=self.aug_logits)
+        self.assertTrue(torch.isclose(got, expected, atol=1e-7))
+
+    def test_style_invariance_can_fallback_to_directional_kl(self):
+        cfg = StrategyConfig(
+            name="style_invariance",
+            consistency_weight=0.5,
+            style_use_js=False,
+            adaptive_consistency_focus=False,
+        )
+        base_ce = torch.nn.functional.cross_entropy(self.clean_logits, self.labels)
+        expected = base_ce + 0.5 * consistency_kl(self.clean_logits, self.aug_logits)
+        got = total_loss(cfg, self.clean_logits, self.labels, aug_logits=self.aug_logits)
+        self.assertTrue(torch.isclose(got, expected, atol=1e-7))
+
     def test_style_confidence_threshold_can_disable_consistency(self):
         cfg = StrategyConfig(
             name="style_invariance",

@@ -10,6 +10,10 @@ class StrategyConfig:
     consistency_weight: float = 0.5
     manifold_weight: float = 0.05
     sentiment_use_js: bool = True
+    # Style robustness option: use bounded symmetric JS instead of directional
+    # KL for style_invariance consistency. Style-transfer attacks are often
+    # non-directional (either view can look "cleaner"), so JS can reduce bias.
+    style_use_js: bool = True
     # Confidence gate for augmentation consistency.
     # Only clean predictions with max-prob >= threshold contribute to
     # consistency regularization, reducing noisy invariance pressure.
@@ -186,9 +190,13 @@ def total_loss(strategy: StrategyConfig, clean_logits, labels, aug_logits=None, 
             else clean_logits.new_tensor(1.0)
         )
         base = ce + strategy.consistency_weight * conf_scale * consistency_kl_symmetric(clean_cons, aug_cons)
-    elif strategy.name == "sentiment_invariance" and strategy.sentiment_use_js:
-        # Paper-grounded tweak (AdSent): keep veracity stable under sentiment flips
-        # using a symmetric divergence instead of one-way KL.
+    elif strategy.name in {"sentiment_invariance", "style_invariance"} and (
+        (strategy.name == "sentiment_invariance" and strategy.sentiment_use_js)
+        or (strategy.name == "style_invariance" and strategy.style_use_js)
+    ):
+        # Paper-grounded tweak (AdSent + style-transfer robustness literature):
+        # for non-directional perturbations, a symmetric bounded divergence is
+        # often more stable than one-way KL.
         conf_scale = _consistency_confidence_scale(clean_logits, strategy.confidence_threshold)
         focus_scale = _adaptive_consistency_focus_scale(
             clean_cons,
