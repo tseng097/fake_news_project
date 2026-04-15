@@ -442,8 +442,9 @@ def lexical_synonym_perturb(
     """Lexical perturbation by WordNet synonyms for mHC-lite training.
 
     Design choices (paper-grounded):
-    1) avoid swapping sentiment-bearing lexemes because sentiment cues are a
-       known attack surface in fake-news detection and can drift labels;
+    1) avoid swapping sentiment-bearing lexemes (core polarity + tone words)
+       because sentiment cues are a known attack surface in fake-news detection
+       and can drift labels;
     2) avoid swapping modifier/negation pivots (e.g., "only", "never") because
        adversarial benchmarks show detectors are brittle to compositional cues;
     3) avoid swapping quantifier/comparative pivots (e.g., "many", "more",
@@ -489,6 +490,12 @@ def lexical_synonym_perturb(
     # built-in pivot lexicons to keep perturbations semantically conservative.
     base_protected = (
         set(SENTIMENT_SWAP.keys())
+        # mHC-lite sentiment-safety extension: also protect high-valence tone
+        # lexemes used by sentiment_shift_simple (e.g., shocking/outrageous).
+        # Paper grounding: sentiment-manipulation and style-attack studies show
+        # these words can be exploited; keeping them fixed in lexical_mhc_lite
+        # avoids leakage between lexical and sentiment invariance objectives.
+        | set(SENTIMENT_TONE_SWAP.keys())
         | MODIFIER_PIVOTS
         | DISCOURSE_PIVOTS
         | QUANTIFIER_COMPARATIVE_PIVOTS

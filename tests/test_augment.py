@@ -161,6 +161,21 @@ class LexicalMhcLiteSafetyTests(unittest.TestCase):
         self.assertEqual(out, text)
 
     @patch("src.augment.wn")
+    def test_lexical_perturb_protects_sentiment_tone_words(self, mock_wn):
+        def _synsets(tok):
+            if tok.lower() == "shocking":
+                return [_DummySynset(["ordinary"])]
+            if tok.lower() == "report":
+                return [_DummySynset(["account"])]
+            return []
+
+        mock_wn.synsets.side_effect = _synsets
+        text = "A shocking report spread quickly"
+        out = lexical_synonym_perturb(text, budget_ratio=1.0, seed=91, protected_words=set())
+        # mHC-lite should keep sentiment-tone pivots fixed to prevent sentiment drift.
+        self.assertIn("shocking", out.lower())
+
+    @patch("src.augment.wn")
     def test_lexical_perturb_protects_discourse_pivot_words(self, mock_wn):
         mock_wn.synsets.side_effect = lambda tok: [_DummySynset(["nonetheless"])] if tok.lower() == "however" else []
         text = "However the claim remained unsupported"
