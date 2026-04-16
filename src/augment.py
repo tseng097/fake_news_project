@@ -205,6 +205,21 @@ TEMPORAL_CAUSAL_PIVOTS = {
     "hence",
 }
 
+# mHC-lite modality pivots: adversarial benchmark work on fake-news detection
+# shows strong brittleness to compositional operators. Modal auxiliaries encode
+# claim certainty/obligation ("must" vs "might"), so lexical swaps on these
+# tokens can silently change veracity stance. We protect them for safer
+# paraphrastic synonym augmentation.
+MODALITY_PIVOTS = {
+    "must",
+    "might",
+    "could",
+    "should",
+    "would",
+    "may",
+    "cannot",
+}
+
 # mHC-lite stance-verb pivots: lexical adversarial methods (e.g., TextBugger,
 # PWWS, DeepWordBug) prioritize high-saliency content words. In fake-news text,
 # reporting/attribution verbs can be claim-critical ("confirmed" vs "alleged",
@@ -451,12 +466,14 @@ def lexical_synonym_perturb(
        "less", "majority") because these often encode claim logic/scope;
     4) avoid swapping temporal/causal operators (e.g., "before", "because"),
        which can invert event logic under black-box lexical attacks;
-    5) avoid swapping claim stance/reporting verbs (e.g., "confirmed",
+    5) avoid swapping modal certainty operators (e.g., "must", "might")
+       because adversarial compositional edits here can alter claim certainty;
+    6) avoid swapping claim stance/reporting verbs (e.g., "confirmed",
        "alleged", "denied") because adversarial lexical saliency attacks often
        target these and can alter veracity stance rather than wording;
-    6) avoid swapping epistemic hedges (e.g., "reportedly", "possibly") since
+    7) avoid swapping epistemic hedges (e.g., "reportedly", "possibly") since
        tiny certainty-marker edits can change perceived evidence strength;
-    7) prefer POS-consistent substitutions (when WordNet POS metadata exists)
+    8) prefer POS-consistent substitutions (when WordNet POS metadata exists)
        to reduce noun/verb drift from context-free synonym lookup.
 
     This keeps lexical_mhc_lite focused on lexical paraphrase invariance, while
@@ -500,6 +517,9 @@ def lexical_synonym_perturb(
         | DISCOURSE_PIVOTS
         | QUANTIFIER_COMPARATIVE_PIVOTS
         | TEMPORAL_CAUSAL_PIVOTS
+        # mHC-lite safety: preserve modal certainty pivots (must/might/etc.)
+        # to avoid lexical edits that alter claim confidence semantics.
+        | MODALITY_PIVOTS
         # mHC-lite safety: preserve stance/reporting pivots so lexical
         # augmentations avoid mutating claim attribution logic.
         | STANCE_VERB_PIVOTS

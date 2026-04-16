@@ -314,6 +314,21 @@ class LexicalMhcLiteSafetyTests(unittest.TestCase):
         self.assertIn("trustworthy", out.lower())
 
     @patch("src.augment.wn")
+    def test_lexical_perturb_protects_modal_certainty_pivots(self, mock_wn):
+        def _synsets(tok):
+            if tok.lower() == "might":
+                return [_DummySynset(["could"])]
+            if tok.lower() == "reliable":
+                return [_DummySynset(["trustworthy"])]
+            return []
+
+        mock_wn.synsets.side_effect = _synsets
+        text = "A reliable source might confirm the claim"
+        out = lexical_synonym_perturb(text, budget_ratio=1.0, seed=57, protected_words=set())
+        self.assertIn("might", out.lower())
+        self.assertIn("trustworthy", out.lower())
+
+    @patch("src.augment.wn")
     def test_lexical_perturb_protects_stance_verb_pivots(self, mock_wn):
         def _synsets(tok):
             if tok.lower() == "confirmed":
