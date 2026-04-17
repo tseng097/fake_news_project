@@ -263,6 +263,31 @@ def _detokenize_simple(tokens: List[str]) -> str:
     return s
 
 
+def _quoted_word_positions(tokens: List[str]) -> set[int]:
+    """Return word-token indices occurring inside simple quote spans.
+
+    mHC-lite lexical perturbation aims to preserve claim semantics. In fake-news
+    text, quoted fragments often contain precise attributed claims, and lexical
+    substitutions inside quotes are high-risk for meaning drift.
+
+    Inspired by adversarial lexical/substitution literature (e.g., HotFlip,
+    Alzantot et al.) showing high-saliency token edits can flip predictions, we
+    conservatively protect quoted spans from synonym replacement.
+    """
+    in_quote = False
+    quoted: set[int] = set()
+    quote_tokens = {'"', "'", "``", "''"}
+
+    for i, tok in enumerate(tokens):
+        if tok in quote_tokens:
+            in_quote = not in_quote
+            continue
+        if in_quote and tok.isalpha():
+            quoted.add(i)
+
+    return quoted
+
+
 def _sentiment_polarity_balance(text: str) -> int:
     """Cheap polarity proxy for augmentation safety checks.
 
@@ -474,7 +499,9 @@ def lexical_synonym_perturb(
     7) avoid swapping epistemic hedges (e.g., "reportedly", "possibly") since
        tiny certainty-marker edits can change perceived evidence strength;
     8) prefer POS-consistent substitutions (when WordNet POS metadata exists)
-       to reduce noun/verb drift from context-free synonym lookup.
+       to reduce noun/verb drift from context-free synonym lookup;
+    9) avoid substitutions inside quoted spans to protect attributed claim text
+       where tiny lexical edits can disproportionately alter semantics.
 
     This keeps lexical_mhc_lite focused on lexical paraphrase invariance, while
     sentiment-specific perturbations remain isolated to sentiment_invariance.
@@ -529,12 +556,14 @@ def lexical_synonym_perturb(
     )
     protected = set(protected_words) | base_protected if protected_words is not None else base_protected
 
+    quoted_positions = _quoted_word_positions(tokens)
     word_positions = [
         i
         for i, t in enumerate(tokens)
         if t.isalpha()
         and len(t) > 3
         and t.lower() not in protected
+        and i not in quoted_positions
         and not _looks_like_named_entity(tokens, i)
         and not _near_numeric_context(tokens, i)
         # mHC-lite ambiguity guard: avoid replacing highly polysemous source

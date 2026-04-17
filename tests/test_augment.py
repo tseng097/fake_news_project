@@ -198,6 +198,25 @@ class LexicalMhcLiteSafetyTests(unittest.TestCase):
         self.assertIn("many", out.lower())
 
     @patch("src.augment.wn")
+    def test_lexical_perturb_preserves_quoted_claim_tokens(self, mock_wn):
+        def _synsets(tok):
+            if tok.lower() == "miracle":
+                return [_DummySynset(["wonder"])]
+            if tok.lower() == "official":
+                return [_DummySynset(["authority"])]
+            return []
+
+        mock_wn.synsets.side_effect = _synsets
+        text = 'An official called it "miracle cure" in the post'
+        out = lexical_synonym_perturb(text, budget_ratio=1.0, seed=67, protected_words=set())
+        # mHC-lite guard: keep quoted claim words unchanged.
+        self.assertIn("miracle", out.lower())
+        self.assertIn("cure", out.lower())
+        self.assertNotIn("wonder", out.lower())
+        # Non-quoted non-pivot token can still be perturbed.
+        self.assertIn("authority", out.lower())
+
+    @patch("src.augment.wn")
     def test_lexical_perturb_reverts_on_sentiment_sign_flip(self, mock_wn):
         mock_wn.synsets.side_effect = lambda tok: [_DummySynset(["bad"])] if tok.lower() == "good" else []
         text = "This is a good report"
