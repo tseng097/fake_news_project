@@ -116,6 +116,18 @@ SENTIMENT_EMOJI_SWAP = {
     "💔": "❤️",
 }
 
+# Lightweight punctuation sentiment pivots (ANN/AdSent motivation):
+# emotionally loaded punctuation patterns (e.g., "!!!", "?!") can act as
+# sentiment shortcuts in fake-news text. We include a bounded one-hit swap so
+# sentiment_invariance sees non-lexical sentiment shifts too.
+SENTIMENT_PUNCT_SWAP = {
+    "!!!": ".",
+    "!!": ".",
+    "?!": ".",
+    "!?": ".",
+    "...": ".",
+}
+
 # Modifier / negation pivots from adversarial benchmark-style perturbations.
 # Protecting these helps lexical_mhc_lite avoid semantic inversions caused by
 # edits to compositional cues (e.g., "only", "never", "barely").
@@ -727,7 +739,8 @@ def sentiment_shift_simple(text: str, budget_ratio: float = 0.2, seed: int | Non
     1) phrase-level swaps for stronger sentiment perturbations,
     2) a replacement budget so perturbations stay controlled,
     3) seedable stochastic selection for attack diversity,
-    4) lightweight emoji/emoticon swaps for social-text sentiment cues.
+    4) lightweight emoji/emoticon swaps for social-text sentiment cues,
+    5) one-hit punctuation sentiment pivots (e.g., "!!!" -> ".").
 
     The seed option is useful for reproducible ablations while still supporting
     diverse sentiment attacks across training samples.
@@ -761,20 +774,32 @@ def sentiment_shift_simple(text: str, budget_ratio: float = 0.2, seed: int | Non
                 # Prevent inverse map from immediately undoing the same edit.
                 break
 
-    # Phase 1: phrase-level swaps (case-insensitive, bounded by remaining budget)
+    # Phase 1: punctuation-level swap (bounded one-hit).
+    punct_hits = 0
+    punct_items = list(SENTIMENT_PUNCT_SWAP.items())
+    rng.shuffle(punct_items)
+    for src, dst in punct_items:
+        if emoji_hits + punct_hits >= swap_budget:
+            break
+        if src in shifted:
+            shifted = shifted.replace(src, dst, 1)
+            punct_hits += 1
+            break
+
+    # Phase 2: phrase-level swaps (case-insensitive, bounded by remaining budget)
     phrase_hits = 0
     phrase_items = list(SENTIMENT_PHRASE_SWAP.items())
     rng.shuffle(phrase_items)
     for src, dst in phrase_items:
-        if emoji_hits + phrase_hits >= swap_budget:
+        if emoji_hits + punct_hits + phrase_hits >= swap_budget:
             break
         pattern = re.compile(rf"\b{re.escape(src)}\b", flags=re.IGNORECASE)
         if pattern.search(shifted):
             shifted = pattern.sub(dst, shifted, count=1)
             phrase_hits += 1
 
-    # Phase 2: token-level swaps consume remaining budget
-    remaining_budget = max(swap_budget - emoji_hits - phrase_hits, 0)
+    # Phase 3: token-level swaps consume remaining budget
+    remaining_budget = max(swap_budget - emoji_hits - punct_hits - phrase_hits, 0)
     # Avoid polarity flip-flop: when phrase swaps already fired, stop here.
     # This keeps controlled attacks directional and easier to interpret.
     if remaining_budget == 0 or phrase_hits > 0:

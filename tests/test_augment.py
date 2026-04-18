@@ -82,6 +82,23 @@ class SentimentShiftSimpleTests(unittest.TestCase):
         )
         self.assertLessEqual(changed_signals, 1)
 
+    def test_punctuation_sentiment_swap_applies(self):
+        text = "This is AMAZING!!!"
+        out = sentiment_shift_simple(text, budget_ratio=0.4, seed=5)
+        self.assertIn(".", out)
+        self.assertNotIn("!!!", out)
+
+    def test_punctuation_swap_respects_tight_budget(self):
+        text = "Excellent work!!! good update"
+        out = sentiment_shift_simple(text, budget_ratio=0.1, seed=15)
+        # With one-hit budget, avoid stacking punctuation+token swaps.
+        changed_signals = sum(
+            1
+            for marker in [".", "bad", "terrible", "awful", "negative", "failure"]
+            if marker in out.lower()
+        )
+        self.assertLessEqual(changed_signals, 1)
+
 
 class StyleReframeSimpleTests(unittest.TestCase):
     def test_style_reframe_normalizes_all_caps_and_punctuation(self):
