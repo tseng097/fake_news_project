@@ -168,6 +168,12 @@ class StyleReframeSimpleTests(unittest.TestCase):
         self.assertFalse(out.lower().startswith("reuters -"))
         self.assertIn("breaking update: officials deny the claim", out.lower())
 
+    def test_style_reframe_removes_wire_dateline_prefix(self):
+        text = "WASHINGTON (AP) — BREAKING UPDATE: Officials deny the claim"
+        out = style_reframe_simple(text)
+        self.assertFalse(out.lower().startswith("washington (ap)"))
+        self.assertIn("officials deny the claim", out.lower())
+
 
 class LexicalMhcLiteSafetyTests(unittest.TestCase):
     @patch("src.augment.wn")

@@ -686,10 +686,19 @@ def style_reframe_simple(text: str) -> str:
         flags=re.IGNORECASE,
     )
 
-    # Paper-grounded style cue strip: some robustness papers (Style-News,
-    # adversarial style augmentation) show source/byline wrappers can become
-    # shortcut features. Remove leading source tags while preserving the claim
-    # text, e.g., "Reuters -", "AP |", "BBC News:".
+    # Paper-grounded style cue strip: fake-news style robustness work
+    # (e.g., Style-News / AdStyle settings) indicates wire-style datelines and
+    # source wrappers can become shortcut features. Remove compact dateline
+    # prefixes while preserving the claim text.
+    # Examples removed: "WASHINGTON (AP) —", "NEW YORK -", "LONDON:"
+    out = re.sub(
+        r"^\s*[A-Z][A-Z\s]{1,24}(?:\s*\([A-Za-z\.\s]{2,12}\))?\s*(?:—|--|-|:|\|)\s+",
+        "",
+        out,
+    )
+
+    # Remove leading source tags while preserving claim text.
+    # Examples: "Reuters -", "AP |", "BBC News:".
     out = re.sub(
         r"^\s*(?:[A-Za-z]{2,10}(?:\s+[A-Za-z]{2,10}){0,2})\s*(?:\||-|:)\s+",
         "",
