@@ -527,9 +527,19 @@ def lexical_synonym_perturb(
     under context-free WordNet lookup. Lower values are stricter and usually
     safer for veracity-preserving paraphrase augmentation.
 
+    `budget_ratio` is a strict upper-bound control for lexical attack strength:
+    - <= 0.0 means no lexical substitutions (explicit no-op);
+    - > 0.0 allows at least one change when eligible tokens exist.
+    This mirrors adversarial-training findings that perturbation intensity should
+    be tunable for stable robustness/accuracy trade-offs.
+
     If NLTK wordnet is unavailable, falls back to no-op.
     """
     if wn is None:
+        return text
+    if budget_ratio <= 0.0:
+        # mHC-lite strict budget guard: caller can explicitly disable lexical
+        # perturbation for ablations or warm-up epochs without changing codepath.
         return text
 
     rng = random.Random(seed)

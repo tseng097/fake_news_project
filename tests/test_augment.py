@@ -240,6 +240,14 @@ class LexicalMhcLiteSafetyTests(unittest.TestCase):
         self.assertIn("authority", out.lower())
 
     @patch("src.augment.wn")
+    def test_lexical_perturb_budget_zero_forces_noop(self, mock_wn):
+        mock_wn.synsets.side_effect = lambda tok: [_DummySynset(["solid"])] if tok.lower() == "reliable" else []
+        text = "A reliable report described the event"
+        out = lexical_synonym_perturb(text, budget_ratio=0.0, seed=7, protected_words=set())
+        # mHC-lite strict-budget behavior: explicit zero means no lexical edit.
+        self.assertEqual(out, text)
+
+    @patch("src.augment.wn")
     def test_lexical_perturb_reverts_on_sentiment_sign_flip(self, mock_wn):
         mock_wn.synsets.side_effect = lambda tok: [_DummySynset(["bad"])] if tok.lower() == "good" else []
         text = "This is a good report"
